@@ -7,6 +7,7 @@ executors:
       - image: circleci/buildpack-deps:stretch
 jobs:
   build:
+    working_directory: ~/scraiber-api/src
     executor: docker-publisher
     steps:
       - checkout
@@ -14,7 +15,7 @@ jobs:
       - run:
           name: Build Docker image
           command: |
-            docker build -t $IMAGE_NAME:latest -f ./src/Dockerfile .
+            docker build -t $IMAGE_NAME:latest .
       - run:
           name: Archive Docker image
           command: docker save -o image.tar $IMAGE_NAME
