@@ -2,7 +2,7 @@ version: 2.1
 executors:
   docker-publisher:
     environment:
-      IMAGE_NAME: scraiber/kubectl-api
+      IMAGE_NAME: scraiber/scraiber-api
     docker:
       - image: circleci/buildpack-deps:stretch
 jobs:
