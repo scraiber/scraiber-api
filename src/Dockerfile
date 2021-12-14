@@ -1,15 +1,15 @@
 # pull official base image
-FROM python:3.10.0-slim
+FROM python:3.10.0-alpine
 
 # set work directory
-WORKDIR /code
+WORKDIR /usr/src/app
 
 # set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 # copy requirements file
-COPY ./requirements.txt /code/requirements.txt
+COPY ./requirements.txt /usr/src/app/requirements.txt
 
 # install dependencies
 RUN set -eux \
@@ -17,10 +17,10 @@ RUN set -eux \
         libressl-dev libffi-dev gcc musl-dev python3-dev \
         postgresql-dev bash \
     && pip install --upgrade pip setuptools wheel \
-    && pip install -r /code/requirements.txt \
+    && pip install -r /usr/src/app/requirements.txt \
     && rm -rf /root/.cache/pip
 
 # copy project
-COPY ./app /code/app
+COPY . /usr/src/app/
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
