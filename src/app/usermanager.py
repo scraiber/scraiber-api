@@ -1,12 +1,23 @@
 from typing import Optional
+import os
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, params
 from fastapi_users import BaseUserManager
 
 from .db import get_user_db
 from app.api.models import UserCreate, UserDB
 
-SECRET = "SECRET"
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
+
+
+configuration = sib_api_v3_sdk.Configuration()
+configuration.api_key['api-key'] = os.getenv("SENDINBLUE_API_KEY")
+
+api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+
+
+SECRET = os.getenv("SCRAIBER_API_SECRET")
 
 
 
@@ -23,7 +34,7 @@ class UserManager(BaseUserManager[UserCreate, UserDB]):
     async def on_after_register(self, user: UserDB, request: Optional[Request] = None):
 
         print(f"User {user.id} has registered.")
-
+        await self.request_verify(user, request)
 
 
     async def on_after_forgot_password(
@@ -43,6 +54,25 @@ class UserManager(BaseUserManager[UserCreate, UserDB]):
     ):
 
         print(f"Verification requested for user {user.id}. Verification token: {token}")
+        subject = "Scraiber registration"
+        html_content = "<html><body><h1>Please use to verify e-mail {0}</h1></body></html>".format(token)
+        sender = {"name":"Scraiber","email":"no-reply@scraiber.com"}
+        to = [{"email":user.email,"name":"Tobi"}]
+        #cc = [{"email":"example2@example2.com","name":"Janice Doe"}]
+        #bcc = [{"name":"John Doe","email":"example@example.com"}]
+        reply_to = {"name":"Scraiber","email":"no-reply@scraiber.com"}
+        headers = {"Some-Custom-Name":"unique-id-1234"}
+        params = {"link": "https://www.bbc.com/"}
+        #params = {"parameter":"My param value","subject":"New Subject"}
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(to=to, reply_to=reply_to, headers=headers, html_content=html_content, sender=sender, subject=subject)
+
+
+        try:
+            api_response = api_instance.send_transac_email(send_smtp_email)
+            print(api_response)
+        except ApiException as e:
+            print("Exception when calling SMTPApi->send_transac_email: %s\n" % e)
+
 
 
 

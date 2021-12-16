@@ -12,7 +12,10 @@ services:
     ports:
       - 8002:8000
     environment:
-      - DATABASE_URL2=postgresql://hello_fastapi:hello_fastapi@db/hello_fastapi_dev
+      - DATABASE_URL=postgresql://hello_fastapi:hello_fastapi@db/hello_fastapi_dev
+      - SCRAIBER_API_SECRET=SECRET
+    env_file:
+      - .env
   db:
     image: postgres:13-alpine
     volumes:
