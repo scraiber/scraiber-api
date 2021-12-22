@@ -5,7 +5,8 @@ from fastapi import Depends, Request, params
 from fastapi_users import BaseUserManager
 
 from .db import get_user_db
-from app.api.models import UserCreate, UserDB
+from app.api.models.users import UserCreate, UserDB
+
 
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
@@ -52,7 +53,7 @@ class UserManager(BaseUserManager[UserCreate, UserDB]):
         self, user: UserDB, token: str, request: Optional[Request] = None
 
     ):
-
+        """
         print(f"Verification requested for user {user.id}. Verification token: {token}")
         subject = "Scraiber registration"
         html_content = "<html><body><h1>Please use to verify e-mail {0}</h1></body></html>".format(token)
@@ -72,7 +73,7 @@ class UserManager(BaseUserManager[UserCreate, UserDB]):
             print(api_response)
         except ApiException as e:
             print("Exception when calling SMTPApi->send_transac_email: %s\n" % e)
-
+        """
 
 
 

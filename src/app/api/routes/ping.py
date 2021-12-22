@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi import Depends
 
-from app.api.models import User
+from app.api.models.users import User
 from app.fastapiusers import current_user
 
 

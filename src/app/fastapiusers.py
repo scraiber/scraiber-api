@@ -2,7 +2,7 @@ from fastapi_users import FastAPIUsers
 from fastapi_users.authentication import JWTAuthentication
 import os
 
-from app.api.models import User, UserCreate, UserUpdate, UserDB
+from app.api.models.users import User, UserCreate, UserUpdate, UserDB
 from app.usermanager import get_user_manager
 
 

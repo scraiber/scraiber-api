@@ -1,4 +1,4 @@
-version: '3.2'
+version: '3.8'
 
 services:
   web:
@@ -16,25 +16,6 @@ services:
       - SCRAIBER_API_SECRET=SECRET
       - SENDINBLUE_API_KEY=${SENDINBLUE_API_KEY}
       - CLUSTER_DICT=${CLUSTER_DICT}
-    depends_on:
-      - db
-  test:
-    build: 
-      context: ./src/
-      dockerfile: Dockerfile-test
-    volumes:
-      - ./src/:/usr/src/app/
-    stdin_open: true
-    environment:
-      - DATABASE_URL=postgresql://hello_fastapi:hello_fastapi@db:5432/hello_fastapi_dev
-      - SCRAIBER_API_SECRET=SECRET
-      - SENDINBLUE_API_KEY=${SENDINBLUE_API_KEY}
-      - CLUSTER_DICT=${CLUSTER_DICT}
-      - TEST_PORT=8000
-      - TEST_HOST=web
-      - DB_HOST=db
-    depends_on:
-      - web
   db:
     image: postgres:13-alpine
     volumes:
