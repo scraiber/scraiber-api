@@ -29,7 +29,8 @@ secret:
   postgresqlURL: null
   scraiberAPISecret: null
   sendinblueAPIKey: null
-
+  clusterDict: null
+  
 podAnnotations: {}
 
 podSecurityContext: {}
