@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.routes import ping, notes, project2user_management, projects
+from app.api.routes import ping, notes, projects, user_management, owner_transfer
 from app.db import database, engine, metadata
 from app.fastapiusers import fastapi_users, jwt_authentication
 from fastapi_utils.tasks import repeat_every
@@ -37,7 +37,9 @@ async def shutdown():
 app.include_router(ping.router)
 app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
-app.include_router(project2user_management.router, prefix="/project2external", tags=["project2external"])
+app.include_router(user_management.router, prefix="/project_user_management", tags=["project_user_management"])
+app.include_router(owner_transfer.router, prefix="/owner_transfer", tags=["owner_transfer"])
+
 app.include_router(
     fastapi_users.get_auth_router(jwt_authentication),
     prefix="/auth/jwt",

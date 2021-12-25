@@ -1,11 +1,13 @@
 from typing import Optional
 import os
-
-from fastapi import Depends, Request, params
+from asyncpg.exceptions import UniqueViolationError
+from fastapi import Depends, Request, params, HTTPException
 from fastapi_users import BaseUserManager
 
 from .db import get_user_db
 from app.api.models.users import UserCreate, UserDB
+from app.api.crud import project2external, project2ownercandidate, project2user, projects
+from app.api.models.projects import Project2ExternalDB, Project2UserDB
 
 
 import sib_api_v3_sdk
@@ -33,26 +35,40 @@ class UserManager(BaseUserManager[UserCreate, UserDB]):
 
 
     async def on_after_register(self, user: UserDB, request: Optional[Request] = None):
-
+        projects_to_add = await project2external.get_by_email(user.email)
+        if projects_to_add:
+            projects_to_add_deserialized = [Project2ExternalDB(**item).dict() for item in projects_to_add]
+            for item in projects_to_add_deserialized:
+                try:
+                    await project2user.post(Project2UserDB(name=item.name, region=item.region, user_id=user.id, is_admin=item.is_admin))
+                except UniqueViolationError:
+                    pass
+            await project2external.delete_by_email(user.email)
+            #TODO: Write e-mail to user resp. owners
         print(f"User {user.id} has registered.")
         await self.request_verify(user, request)
 
 
-    async def on_after_forgot_password(
-
-        self, user: UserDB, token: str, request: Optional[Request] = None
-
-    ):
+    async def on_after_forgot_password(self, user: UserDB, token: str, request: Optional[Request] = None):
 
         print(f"User {user.id} has forgot their password. Reset token: {token}")
 
 
+    async def delete(self, user: UserDB) -> None:
+        """
+        Delete a user.
 
-    async def on_after_request_verify(
+        :param user: The user to delete.
+        """
+        if await projects.get_by_owner(user.id):
+            raise HTTPException(status_code=403, detail="You still own projects. Please transfer the ownership or delte them.")
+        await project2ownercandidate.delete_by_candidate(user.id)
+        await project2user.delete_by_user(user.id)
+        #TODO: Write e-mail for confirming deletion
+        await self.user_db.delete(user)
 
-        self, user: UserDB, token: str, request: Optional[Request] = None
 
-    ):
+    async def on_after_request_verify(self, user: UserDB, token: str, request: Optional[Request] = None):
         """
         print(f"Verification requested for user {user.id}. Verification token: {token}")
         subject = "Scraiber registration"

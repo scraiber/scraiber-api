@@ -32,9 +32,27 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          envFrom:
-            - secretRef:
-              name: {{ .Values.secret.secretName }}
+          env:
+          - name: DATABASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: DATABASE_URL
+          - name: SCRAIBER_API_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: SCRAIBER_API_SECRET
+          - name: SENDINBLUE_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: SENDINBLUE_API_KEY
+          - name: CLUSTER_DICT
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: CLUSTER_DICT
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

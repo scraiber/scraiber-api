@@ -60,7 +60,7 @@ project2ownercandidate = Table(
     metadata,
     Column("name", String(50), primary_key=True),
     Column("region", String, primary_key=True),
-    Column("candidate_id", UUID, primary_key=True),
+    Column("candidate_id", UUID),
     Column("created_date", DateTime, default=func.now(), nullable=False),
 )
 project2external = Table(

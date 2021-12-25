@@ -20,7 +20,9 @@ async def get_by_project(primary_key: ProjectPrimaryKey):
     query = project2external.select().where(primary_key.name == project2external.c.name).where(primary_key.region == project2external.c.region)
     return await database.fetch_all(query=query)
 
-
+async def get_by_email(e_mail: EmailStr):
+    query = project2external.select().where(e_mail == project2external.c.e_mail)
+    return await database.fetch_all(query=query)
 
 """
 async def delete(primary_key: ProjectPrimaryKey):
@@ -30,6 +32,11 @@ async def delete(primary_key: ProjectPrimaryKey):
 
 async def delete_by_project(primary_key: ProjectPrimaryKey):
     query = project2external.delete().where(primary_key.name == project2external.c.name).where(primary_key.region == project2external.c.region)
+    return await database.execute(query=query)
+
+
+async def delete_by_email(e_mail: EmailStr):
+    query = project2external.delete().where(e_mail == project2external.c.e_mail)
     return await database.execute(query=query)
 
 
