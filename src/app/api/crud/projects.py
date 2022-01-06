@@ -2,7 +2,7 @@ import uuid
 from typing import List
 from fastapi import HTTPException
 
-from app.api.models.projects import ProjectPrimaryKey, ProjectSchemaDB, Project2OwnerCandidateDB
+from app.api.models.projects import ProjectPrimaryKey, ProjectSchema, ProjectSchemaDB, PrimaryKeyWithUserID
 from app.db import projects, database
 
 #from sqlalchemy import tuple_
@@ -23,10 +23,10 @@ async def get_by_owner(owner_id: uuid):
     return await database.fetch_all(query=query)
 
 
-async def owner_check(primary_key: Project2OwnerCandidateDB):
+async def owner_check(primary_key: PrimaryKeyWithUserID):
     query = projects.select().where(primary_key.name == projects.c.name).where(primary_key.region == projects.c.region)
     project = await database.fetch_one(query=query)
-    if not project or ProjectSchemaDB(**project).owner_id != primary_key.id:
+    if not project or ProjectSchemaDB(**project).owner_id != primary_key.candidate_id:
         raise HTTPException(status_code=404, detail="Project not found or user not owner")
 
 '''
@@ -37,17 +37,18 @@ async def get_many(primary_keys: List[(ProjectPrimaryKey)]):
     return await database.fetch_all(query=query)
 '''
 
-async def put_cpu_mem(payload: ProjectSchemaDB):
+async def put_cpu_mem(payload: ProjectSchema):
     query = (
         projects
         .update()
         .where(payload.name == projects.c.name).where(payload.region == projects.c.region)
-        .values(limits_cpu=payload.limits_cpu, limits_mem=payload.limits_mem)
+        .values(max_project_cpu=payload.max_project_cpu, max_project_mem=payload.max_project_mem,
+            default_limit_pod_cpu=payload.default_limit_pod_cpu, default_limit_pod_mem=payload.default_limit_pod_mem)
         .returning(projects.c.name, projects.c.region)
     )
     return await database.execute(query=query)
 
-async def put_owner(payload: Project2OwnerCandidateDB):
+async def put_owner(payload: PrimaryKeyWithUserID):
     query = (
         projects
         .update()

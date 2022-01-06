@@ -1,3 +1,6 @@
 .env
 .env.test
 .scratch-pad
+tests_kubernetes.sh
+chart/scraiber-api/config
+chart/scraiber-api/cluster_dict.json

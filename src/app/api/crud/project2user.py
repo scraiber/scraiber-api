@@ -2,6 +2,7 @@ import uuid
 from fastapi import HTTPException
 
 from app.api.models.projects import ProjectPrimaryKey, Project2UserDB
+from app.api.models.certificates import Certificate2User
 from app.db import project2user, database
 
 
@@ -32,13 +33,18 @@ async def get_by_user(user_id: uuid):
     return await database.fetch_all(query=query)
 
 
+async def get_by_user_and_region(payload: Certificate2User):
+    query = project2user.select().where(payload.user_id == project2user.c.user_id).where(payload.region == project2user.c.region)
+    return await database.fetch_all(query=query)
+
+
 async def put_admin_state(payload: Project2UserDB):
     query = (
         project2user
         .update()
         .where(payload.name == project2user.c.name).where(payload.region == project2user.c.region).where(payload.user_id == project2user.c.user_id)
         .values(is_admin=payload.is_admin)
-        .returning(projects.c.name, projects.c.region)
+        .returning(project2user.c.name, project2user.c.region)
     )
     return await database.execute(query=query)
 

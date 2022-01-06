@@ -1,10 +1,7 @@
-import uuid
-from pydantic import BaseModel, Field, UUID4, validator, EmailStr
-from app.api.models.users import User
-import os
-import json
+from pydantic import BaseModel, Field, UUID4, validator, EmailStr, root_validator
+from typing import Dict, Any
 
-cluster_dict = json.loads(os.environ['CLUSTER_DICT'])
+from app.kubernetes_setup import clusters
 
 
 class ProjectPrimaryKey(BaseModel):
@@ -13,13 +10,27 @@ class ProjectPrimaryKey(BaseModel):
     
     @validator('region')
     def region_must_be_in_list(cls, field_value):
-        if field_value not in cluster_dict.keys():
+        if field_value not in clusters.keys():
             raise ValueError('must be in the regions offered')
         return field_value
 
 class ProjectSchema(ProjectPrimaryKey):
-    limits_cpu: float = Field(..., ge=0)
-    limits_mem: float = Field(..., ge=0)
+    max_project_cpu: float = Field(..., ge=0)
+    max_project_mem: float = Field(..., ge=0)
+    default_limit_pod_cpu: float = Field(..., ge=0)
+    default_limit_pod_mem: float = Field(..., ge=0)
+
+    @root_validator()
+    def validate_cpu(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values.get('max_project_cpu')<values.get('default_limit_pod_cpu'):
+            raise ValueError('The CPU maximum for the project must not be smaller than the default CPU for a pod')
+        return values
+
+    @root_validator()
+    def validate_mem(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values.get('max_project_mem')<values.get('default_limit_pod_mem'):
+            raise ValueError('The memory maximum for the project must not be smaller than the default memory for a pod')
+        return values
 
 class ProjectSchemaDB(ProjectSchema):
     owner_id: UUID4
@@ -28,9 +39,13 @@ class Project2UserDB(ProjectPrimaryKey):
     user_id: UUID4
     is_admin: bool = False
 
-class Project2OwnerCandidateDB(ProjectPrimaryKey):
+class PrimaryKeyWithUserID(ProjectPrimaryKey):
     candidate_id: UUID4
+
+class PrimaryKeyWithUserIDAndCertNo(PrimaryKeyWithUserID):
+    certificate_no: int = Field(..., ge=1)
 
 class Project2ExternalDB(ProjectPrimaryKey):
     e_mail: EmailStr
     is_admin: bool = False
+

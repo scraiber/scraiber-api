@@ -3,7 +3,8 @@ from asyncpg.exceptions import UniqueViolationError
 from fastapi import APIRouter, HTTPException, Depends
 
 from app.api.crud import project2user, project2external, project2ownercandidate, projects
-from app.api.models.projects import ProjectPrimaryKey, ProjectSchema, ProjectSchemaDB, Project2UserDB, Project2OwnerCandidateDB
+from app.api.kubernetes import namespace, users
+from app.api.models.projects import ProjectPrimaryKey, ProjectSchema, ProjectSchemaDB, Project2UserDB, PrimaryKeyWithUserID
 from app.api.models.users import User
 from app.fastapiusers import current_user, current_active_user
 
@@ -11,12 +12,15 @@ router = APIRouter()
 
 
 @router.post("/", response_model=ProjectSchemaDB, status_code=201)
-async def create_project(payload: ProjectSchema, user: User = Depends(current_active_user)):
+async def create_project(payload: ProjectSchema, user: User = Depends(current_user)):
+    #TODO: replace current_user in the line above by current_active_user
     post_project = {
         "name": payload.name,
         "region": payload.region,
-        "limits_cpu": payload.limits_cpu,
-        "limits_mem": payload.limits_mem,
+        "max_project_cpu": payload.max_project_cpu, 
+        "max_project_mem": payload.max_project_mem, 
+        "default_limit_pod_cpu": payload.default_limit_pod_cpu, 
+        "default_limit_pod_mem": payload.default_limit_pod_mem,
         "owner_id": user.id
     }
     try: 
@@ -24,10 +28,20 @@ async def create_project(payload: ProjectSchema, user: User = Depends(current_ac
     except UniqueViolationError:
         raise HTTPException(status_code=403, detail="Project already exists")
 
+    await namespace.create_namespace(payload)
+
     try: 
-        await project2user.post(Project2UserDB(name=payload.name, region=payload.region, user_id=user.id, is_admin=True))
+        post_user = {
+            "name": payload.name,
+            "region": payload.region,
+            "user_id": user.id,
+            "is_admin": True    
+        }
+        await project2user.post(post_user)
     except UniqueViolationError:
         raise HTTPException(status_code=403, detail="User is already added to project")
+
+    await users.add_user_to_namespace(PrimaryKeyWithUserID(name=payload.name, region=payload.region, candidate_id=user.id))
     #TODO: Write e-mail to owner
     return post_project
 
@@ -74,27 +88,23 @@ async def read_all_projects(user: User = Depends(current_user)):
     return await projects.get_many(payload_list)
 '''
 
-@router.put("/update_cpu_memory", response_model=ProjectSchemaDB, status_code=200)
+@router.put("/update_cpu_memory", response_model=ProjectSchema, status_code=200)
 async def update_cpu_memory(update: ProjectSchema, user: User = Depends(current_user)):
     await project2user.admin_check(Project2UserDB(name=update.name, region=update.region, user_id=user.id))
-    project = await projects.get(ProjectPrimaryKey(name=update.name, region=update.region))
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    project_schema = ProjectSchemaDB(**project)
-    update_payload = ProjectSchemaDB(name=update.name, region=update.region, limits_cpu=update.limits_cpu, limits_mem=update.limits_mem, owner_id=project_schema.owner_id)
-    await projects.put_cpu_mem(update_payload)
+    await projects.put_cpu_mem(update)
+    await namespace.update_namespace(update)
     #TODO: Write e-mail to owner resp. users about the update
-    return update_payload
+    return update
 
 
 @router.delete("/", status_code=200)
 async def delete_by_project(primary_key: ProjectPrimaryKey, user: User = Depends(current_user)):
-    await projects.owner_check(Project2OwnerCandidateDB(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
+    await projects.owner_check(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
 
     #TODO: Write e-mail to owner and associated users about the deletion
     await projects.delete(primary_key)
+    await namespace.delete_namespace(primary_key)
     await project2external.delete_by_project(primary_key)
     await project2ownercandidate.delete(primary_key)
     await project2user.delete_by_project(primary_key)
-    return "No record remaining"
+    return primary_key

@@ -1,11 +1,13 @@
 from fastapi import FastAPI
-
-from app.api.routes import ping, notes, projects, user_management, owner_transfer
-from app.db import database, engine, metadata
-from app.fastapiusers import fastapi_users, jwt_authentication
 from fastapi_utils.tasks import repeat_every
 
+from app.api.routes import kubernetes, ping, notes, projects, user_management, owner_transfer
+from app.db import database, engine, metadata
+from app.fastapiusers import fastapi_users, jwt_authentication
+from app.api.crud import project2external
 
+
+ 
 
 
 metadata.create_all(engine)
@@ -17,15 +19,15 @@ app = FastAPI()
 async def startup():
     await database.connect()
 
-'''
-counter = 0
 @app.on_event("startup")
-@repeat_every(seconds=1, wait_first=True)
-def periodic():
-    global counter
-    print('counter is', counter)
-    counter += 1
-'''
+@repeat_every(seconds=3600, wait_first=True)
+async def periodic():
+    await project2external.delete_by_time()
+
+
+
+
+
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -39,6 +41,7 @@ app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
 app.include_router(user_management.router, prefix="/project_user_management", tags=["project_user_management"])
 app.include_router(owner_transfer.router, prefix="/owner_transfer", tags=["owner_transfer"])
+app.include_router(kubernetes.router, prefix="/kubernetes", tags=["kubernetes"])
 
 app.include_router(
     fastapi_users.get_auth_router(jwt_authentication),

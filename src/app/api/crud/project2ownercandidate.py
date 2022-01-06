@@ -1,10 +1,10 @@
 import uuid
 import datetime
-from app.api.models.projects import Project2OwnerCandidateDB, ProjectPrimaryKey
+from app.api.models.projects import PrimaryKeyWithUserID, ProjectPrimaryKey
 from app.db import project2ownercandidate, database
 
 
-async def post(payload: Project2OwnerCandidateDB):
+async def post(payload: PrimaryKeyWithUserID):
     query = project2ownercandidate.insert().values(payload)
     return await database.execute(query=query)
 

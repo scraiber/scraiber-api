@@ -1,6 +1,4 @@
 version: 2.1
-orbs: 
-  kubernetes: circleci/kubernetes@1.3.0
 executors:
   docker-publisher:
     environment:
@@ -26,67 +24,6 @@ jobs:
           paths:
             - ./image.tar
   test:
-    machine:
-      image: circleci/classic:201808-01
-    environment:
-      K8S_VERSION: v1.23.0
-      KUBECONFIG: /home/circleci/.kube/config
-      MINIKUBE_VERSION: v1.24.0
-      HELM_VERSION: v3.7.2
-      MINIKUBE_WANTUPDATENOTIFICATION: false
-      MINIKUBE_WANTREPORTERRORPROMPT: false
-      MINIKUBE_HOME: /home/circleci
-      CHANGE_MINIKUBE_NONE_USER: true
-      POSTGRESQL_URL: postgresql://test_user:mypass@psql-postgresql.postgresql.svc.cluster.local:5432/scraiber_db
-      FASTAPI_SECRET: SECRET
-    steps:
-      - checkout
-      - kubernetes/install-kubectl
-      - run:
-          name: setup minikube
-          command: |
-            curl -Lo minikube https://github.com/kubernetes/minikube/releases/download/${MINIKUBE_VERSION}/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
-      - run:
-          name: setup helm
-          command: |
-            curl -Lo helm.tar.gz https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz
-            tar -zxvf helm.tar.gz
-            chmod +x linux-amd64/helm
-            sudo mv linux-amd64/helm /usr/local/bin/
-      - run:
-          name: Lint helm
-          command: |
-            helm lint chart/scraiber-api
-      - run:
-          name: start minikube
-          command: |
-            minikube start --vm-driver=docker --kubernetes-version=${K8S_VERSION}
-      - run:
-          name: install Postgresql in cluster
-          command: |
-            helm repo add bitnami https://charts.bitnami.com/bitnami
-            kubectl create ns postgresql
-            helm install psql bitnami/postgresql --namespace postgresql --set global.postgresql.servicePort=5432 --set global.postgresql.postgresqlDatabase=scraiber_db --set global.postgresql.postgresqlUsername=test_user --set global.postgresql.postgresqlPassword=mypass
-            sleep 10
-      - attach_workspace:
-          at: /tmp/workspace
-      - run:
-          name: Load archived Docker image and change tag
-          command: |
-            eval $(minikube docker-env)
-            docker build -t scraiber/scraiber-api:test ./src
-      - run:
-          name: install Scraiber-API in cluster
-          command: |
-            python tests/preparation_kubeconfig.py $KUBECONFIG "chart/scraiber-api/config" "chart/scraiber-api/cluster_dict.json"
-            kubectl create ns backend
-            helm install scraiber-api ./chart/scraiber-api --namespace backend --set image.tag=test --set secret.postgresqlURL=$POSTGRESQL_URL --set secret.scraiberAPISecret=$FASTAPI_SECRET --set secret.sendinblueAPIKey=$SENDINBLUE_API_KEY --set image.pullPolicy=Never
-      - run:
-          name: Test Scraiber-API
-          command: |
-            sleep 5
-            kubectl exec -it $(kubectl get pod -n backend | grep api | awk '{print $1}') -n backend pytest
-  test_old2:
     machine:  # Use a Linux VM instead of docker environment
       image: circleci/classic:201808-01
     working_directory: ~/repo # Default working directory, where your project will be cloned
@@ -192,24 +129,19 @@ workflows:
           filters:
             branches:
               only: main
-#      - helm/lint-chart:
-#          charts-dir: chart
-#          filters:
-#            branches:
-#              only: main
       - test:
           requires:
             - build
           filters:
             branches:
               only: main
-#      - publish-latest:
-#          requires:
-#            - build
-#            - test
-#          filters:
-#            branches:
-#              only: main
+      - publish-latest:
+          requires:
+            - build
+            - test
+          filters:
+            branches:
+              only: main
   build-tags:
     jobs:
       - build:
@@ -218,13 +150,6 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-#      - helm/lint-chart:
-#          charts-dir: chart
-#          filters:
-#            tags:
-#              only: /^v.*/
-#            branches:
-#              ignore: /.*/
       - test:
           requires:
             - build

@@ -5,8 +5,9 @@ from asyncpg.exceptions import UniqueViolationError
 from typing import List
 from pydantic.networks import EmailStr
 
+from app.api.kubernetes import users
 from app.api.crud import project2external, project2user, projects
-from app.api.models.projects import Project2UserDB, ProjectPrimaryKey, ProjectSchemaDB, Project2ExternalDB
+from app.api.models.projects import PrimaryKeyWithUserID, Project2UserDB, ProjectPrimaryKey, ProjectSchemaDB, Project2ExternalDB
 from app.api.models.users import User
 from app.fastapiusers import current_user, get_user_manager
 
@@ -24,6 +25,7 @@ async def add_user_or_invite_external(primary_key: Project2ExternalDB, user: Use
         user_by_email = await user_manager.get_by_email(primary_key.e_mail)
         try:
             await project2user.post(Project2UserDB(name=primary_key.name, region=primary_key.region, user_id=user_by_email.id, is_admin=primary_key.is_admin))
+            await users.add_user_to_namespace(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
             #TODO: Write e-mail to user
         except UniqueViolationError:
             raise HTTPException(status_code=403, detail="Item already exists")   
@@ -113,6 +115,7 @@ async def delete_user_from_project(primary_key: Project2UserDB, user_to_delete: 
         raise HTTPException(status_code=401, detail="The owner cannot be deleted changed")
     #TODO: Write e-mail to owner and associated users about the deletion
     await project2user.delete(primary_key)
+    await users.delete_kubernetes_user(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
     return "No record remaining"
 
 """

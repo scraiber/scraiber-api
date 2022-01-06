@@ -4,10 +4,8 @@ from fastapi_users import models
 from asyncpg.exceptions import UniqueViolationError
 from typing import List
 
-from pydantic.networks import EmailStr
-
-from app.api.crud import project2external, project2user, projects, project2ownercandidate
-from app.api.models.projects import Project2UserDB, ProjectPrimaryKey, ProjectSchemaDB, Project2ExternalDB, Project2OwnerCandidateDB
+from app.api.crud import project2user, projects, project2ownercandidate
+from app.api.models.projects import Project2UserDB, ProjectPrimaryKey, Project2ExternalDB, PrimaryKeyWithUserID
 from app.api.models.users import User
 from app.fastapiusers import current_user, current_active_user, get_user_manager
 
@@ -17,9 +15,9 @@ from app.fastapiusers import current_user, current_active_user, get_user_manager
 router = APIRouter()
 
 
-@router.post("/", response_model=Project2OwnerCandidateDB, status_code=201)
+@router.post("/", response_model=PrimaryKeyWithUserID, status_code=201)
 async def add_owner_candidate(primary_key: Project2ExternalDB, user: User = Depends(current_user), user_manager: BaseUserManager[models.UC, models.UD] = Depends(get_user_manager)):
-    await projects.owner_check(Project2OwnerCandidateDB(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
+    await projects.owner_check(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
     
     candidate_existence_check = await project2ownercandidate.get(ProjectPrimaryKey(name=primary_key.name, region=primary_key.region))
     if candidate_existence_check:
@@ -30,6 +28,9 @@ async def add_owner_candidate(primary_key: Project2ExternalDB, user: User = Depe
         raise HTTPException(status_code=404, detail="User not found")
     if user_by_email.is_verified == False:
         raise HTTPException(status_code=401, detail="User e-mail of new owner candidate is not verified")
+
+    if not await project2user.get(Project2UserDB(name=primary_key.name, region=primary_key.region, user_id=user_by_email.id)):
+        raise HTTPException(status_code=404, detail="User not assigned to project")
 
     try:
         payload = {
@@ -45,14 +46,14 @@ async def add_owner_candidate(primary_key: Project2ExternalDB, user: User = Depe
 
 
 @router.get("/owner_candidate_by_project", response_model=List[Project2UserDB])
-async def get_owner_candidates_by_project(primary_key: ProjectPrimaryKey, user: User = Depends(current_user), user_manager: BaseUserManager[models.UC, models.UD] = Depends(get_user_manager)):
-    await projects.owner_check(Project2OwnerCandidateDB(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
+async def get_owner_candidate_by_project(primary_key: ProjectPrimaryKey, user: User = Depends(current_user), user_manager: BaseUserManager[models.UC, models.UD] = Depends(get_user_manager)):
+    await projects.owner_check(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
 
     project2candidate_res = await project2ownercandidate.get(primary_key)
     if not project2candidate_res:
         raise HTTPException(status_code=404, detail="No associated owner candidate found")
     
-    project2candidate_res_deserialized = Project2OwnerCandidateDB(**project2candidate_res).dict()
+    project2candidate_res_deserialized = PrimaryKeyWithUserID(**project2candidate_res).dict()
     return await user_manager.get(project2candidate_res_deserialized.id) 
 
 
@@ -64,9 +65,9 @@ async def get_projects_for_owner_candidate(user: User = Depends(current_user)):
     return project2user_res
 
 
-@router.put("/accept", response_model=Project2OwnerCandidateDB, status_code=200)
+@router.put("/accept", response_model=PrimaryKeyWithUserID, status_code=200)
 async def accept(primary_key: ProjectPrimaryKey, user: User = Depends(current_active_user)):
-    change_model = Project2OwnerCandidateDB(name=primary_key.name, region=primary_key.region, candidate_id=user.id)
+    change_model = PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id)
     project2user_res = await project2ownercandidate.get(change_model)
     if not project2user_res:
         raise HTTPException(status_code=404, detail="User not owner candidate for project or project not found")
@@ -84,7 +85,7 @@ async def accept(primary_key: ProjectPrimaryKey, user: User = Depends(current_ac
 
 @router.delete("/candidate_for_project")
 async def delete_candidate_for_project(primary_key: Project2ExternalDB, user: User = Depends(current_user)):
-    await projects.owner_check(Project2OwnerCandidateDB(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
+    await projects.owner_check(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
 
     if not await project2ownercandidate.get(primary_key):
         raise HTTPException(status_code=404, detail="No owner candidate for project")
@@ -95,7 +96,7 @@ async def delete_candidate_for_project(primary_key: Project2ExternalDB, user: Us
 
 @router.delete("/project_for_candidate")
 async def delete_project_for_candidate(primary_key: ProjectPrimaryKey, user: User = Depends(current_user)):
-    if not await project2ownercandidate.get(Project2OwnerCandidateDB(name=primary_key.name, region=primary_key.region, candidate_id=user.id)):
+    if not await project2ownercandidate.get(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id)):
         raise HTTPException(status_code=404, detail="User not owner candidate for project or project not found")
 
     #TODO: Write e-mail to owner and associated users about the deletion
