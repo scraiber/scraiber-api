@@ -28,16 +28,10 @@ async def create_namespace(project_item: ProjectSchema):
         metadata=client.V1ObjectMeta(name="limit-range-for-"+project_item.name),
         spec=client.V1LimitRangeSpec(limits=[client.V1LimitRangeItem(default=lr_default, type="Container")]))
 
-    role =client.V1Role(
-        metadata=client.V1ObjectMeta(name="user-role-for-"+project_item.name),
-        rules=[client.V1PolicyRule(["*"], resources=["*"], verbs=["*"])]
-    )
-
     try:
         client_corev1api_region.create_namespace(body=body)
         client_corev1api_region.create_namespaced_resource_quota(body=rq, namespace=project_item.name)
         client_corev1api_region.create_namespaced_limit_range(body=lr, namespace=project_item.name)
-        client_rbacv1api_region.create_namespaced_role(project_item.name, role)
     except ApiException as e:
         print("Exception when trying to create namespace: %s\n" % e)
     return project_item

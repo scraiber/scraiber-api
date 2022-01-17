@@ -9,10 +9,13 @@ async def post(payload: PrimaryKeyWithUserID):
     return await database.execute(query=query)
 
 
-async def get(primary_key: ProjectPrimaryKey):
+async def get_by_project(primary_key: ProjectPrimaryKey):
     query = project2ownercandidate.select().where(primary_key.name == project2ownercandidate.c.name).where(primary_key.region == project2ownercandidate.c.region)
     return await database.fetch_one(query=query)
 
+async def get_by_project_and_candidate(primary_key: PrimaryKeyWithUserID):
+    query = project2ownercandidate.select().where(primary_key.name == project2ownercandidate.c.name).where(primary_key.candidate_id == project2ownercandidate.c.candidate_id)
+    return await database.fetch_one(query=query)
 
 async def get_by_candidate(candidate_id: uuid):
     query = project2ownercandidate.select().where(candidate_id == project2ownercandidate.c.candidate_id)

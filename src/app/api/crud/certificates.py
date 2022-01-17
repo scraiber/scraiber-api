@@ -17,8 +17,9 @@ async def get(payload: Certificate2User):
 async def get_certificate_number(payload: Certificate2User):
     cert2user_respponse = await get(payload)
     if not cert2user_respponse:
-        raise HTTPException(status_code=404, detail="No Certifcate for cluser and user found")   
+        raise HTTPException(status_code=404, detail="No Certifcate for cluster and user found") 
     return Certificate2UserDB(**cert2user_respponse).certificate_no
+
 
 async def put(payload: Certificate2UserDB):
     query = (

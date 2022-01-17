@@ -20,17 +20,15 @@ configuration.api_key['api-key'] = os.getenv("SENDINBLUE_API_KEY")
 api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
 
-SECRET = os.getenv("SCRAIBER_API_SECRET")
+scraiber_api_secret = os.getenv("SCRAIBER_API_SECRET")
 
 
 
 class UserManager(BaseUserManager[UserCreate, UserDB]):
 
     user_db_model = UserDB
-
-    reset_password_token_secret = SECRET
-
-    verification_token_secret = SECRET
+    reset_password_token_secret = scraiber_api_secret
+    verification_token_secret = scraiber_api_secret
 
 
 
@@ -61,7 +59,7 @@ class UserManager(BaseUserManager[UserCreate, UserDB]):
         :param user: The user to delete.
         """
         if await projects.get_by_owner(user.id):
-            raise HTTPException(status_code=403, detail="You still own projects. Please transfer the ownership or delte them.")
+            raise HTTPException(status_code=403, detail="You still own projects. Please transfer the ownership or delete them.")
         await project2ownercandidate.delete_by_candidate(user.id)
         await project2user.delete_by_user(user.id)
         #TODO: Write e-mail for confirming deletion

@@ -31,7 +31,6 @@ async def owner_check(primary_key: PrimaryKeyWithUserID):
 
 '''
 async def get_many(primary_keys: List[(ProjectPrimaryKey)]):
-    print(primary_keys)
     primary_keys_query = [(item["name"], item["region"]) for item in primary_keys]
     query = projects.select().where(tuple_(projects.c.name, projects.c.region).in_(primary_keys_query))
     return await database.fetch_all(query=query)

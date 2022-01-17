@@ -24,14 +24,26 @@ async def add_user_or_invite_external(primary_key: Project2ExternalDB, user: Use
     try:
         user_by_email = await user_manager.get_by_email(primary_key.e_mail)
         try:
-            await project2user.post(Project2UserDB(name=primary_key.name, region=primary_key.region, user_id=user_by_email.id, is_admin=primary_key.is_admin))
-            await users.add_user_to_namespace(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
+            post_user = {
+                "name": primary_key.name,
+                "region": primary_key.region,
+                "user_id": user_by_email.id,
+                "is_admin": primary_key.is_admin    
+            }
+            await project2user.post(post_user)
+            await users.add_user_to_namespace(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user_by_email.id))
             #TODO: Write e-mail to user
         except UniqueViolationError:
             raise HTTPException(status_code=403, detail="Item already exists")   
     except UserNotExists:
         try:
-            await project2external.post(Project2ExternalDB(name=primary_key.name, region=primary_key.region, e_mail=primary_key.e_mail, is_admin=primary_key.is_admin))
+            post_user = {
+                "name": primary_key.name,
+                "region": primary_key.region,
+                "e_mail": primary_key.e_mail,
+                "is_admin": primary_key.is_admin    
+            }
+            await project2external.post(post_user)
             #TODO: Write e-mail to recipient
         except UniqueViolationError:
             raise HTTPException(status_code=403, detail="Item already exists")            
@@ -41,7 +53,6 @@ async def add_user_or_invite_external(primary_key: Project2ExternalDB, user: Use
 @router.get("/externals_by_project", response_model=List[Project2ExternalDB])
 async def get_externals_by_project(primary_key: ProjectPrimaryKey, user: User = Depends(current_user)):
     await project2user.admin_check(Project2UserDB(name=primary_key.name, region=primary_key.region, user_id=user.id))
-
     project2user_res = await project2external.get_by_project(primary_key)
     if not project2user_res:
         raise HTTPException(status_code=404, detail="No externals for project found")
@@ -49,17 +60,16 @@ async def get_externals_by_project(primary_key: ProjectPrimaryKey, user: User = 
 
 
 @router.get("/users_by_project", response_model=List[User])
-async def get_externals_by_project(primary_key: ProjectPrimaryKey, user: User = Depends(current_user), user_manager: BaseUserManager[models.UC, models.UD] = Depends(get_user_manager)):
+async def get_users_by_project(primary_key: ProjectPrimaryKey, user: User = Depends(current_user), user_manager: BaseUserManager[models.UC, models.UD] = Depends(get_user_manager)) -> List[User]:
     await project2user.admin_check(Project2UserDB(name=primary_key.name, region=primary_key.region, user_id=user.id))
-
     project2user_res = await project2user.get_by_project(primary_key)
     if not project2user_res:
-        raise HTTPException(status_code=404, detail="No users for users found")
+        raise HTTPException(status_code=404, detail="No users for project found")
     
-    project2user_res_deserialized = [Project2UserDB(**item).dict() for item in project2user_res]
+    project2user_res_deserialized = [Project2UserDB(**item) for item in project2user_res]
     output = []
     for item in project2user_res_deserialized:
-        user_res = await user_manager.get(item.id) 
+        user_res = await user_manager.get(item.user_id) 
         if not user_res:
             next
         output.append(user_res)
@@ -67,7 +77,7 @@ async def get_externals_by_project(primary_key: ProjectPrimaryKey, user: User = 
     return output
 
 
-@router.put("/admin_state", response_model=ProjectSchemaDB, status_code=200)
+@router.put("/admin_state", response_model=Project2UserDB, status_code=200)
 async def update_admin_state(update: Project2UserDB, user: User = Depends(current_user)):
     await project2user.admin_check(Project2UserDB(name=update.name, region=update.region, user_id=user.id))
     project = await projects.get(ProjectPrimaryKey(name=update.name, region=update.region))
@@ -85,7 +95,7 @@ async def update_admin_state(update: Project2UserDB, user: User = Depends(curren
 
 
 @router.delete("/external_from_project")
-async def delete_external_from_project(primary_key: Project2ExternalDB, email_to_delete: EmailStr, user: User = Depends(current_user)):
+async def delete_external_from_project(primary_key: Project2ExternalDB, user: User = Depends(current_user)):
     await project2user.admin_check(Project2UserDB(name=primary_key.name, region=primary_key.region, user_id=user.id))
 
     #TODO: Write e-mail to owner and associated users about the deletion
@@ -103,19 +113,19 @@ async def delete_all_externals_from_project(primary_key: ProjectPrimaryKey, user
 
 
 @router.delete("/user_from_project")
-async def delete_user_from_project(primary_key: Project2UserDB, user_to_delete: User, user: User = Depends(current_user)):
-    if user_to_delete != user:
+async def delete_user_from_project(primary_key: Project2UserDB, user: User = Depends(current_user)):
+    if primary_key.user_id != user.id:
         await project2user.admin_check(Project2UserDB(name=primary_key.name, region=primary_key.region, user_id=user.id))
 
     project = await projects.get(ProjectPrimaryKey(name=primary_key.name, region=primary_key.region))
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     project_deserialized = ProjectSchemaDB(**project)
-    if project_deserialized.owner_id == user_to_delete.user_id:
-        raise HTTPException(status_code=401, detail="The owner cannot be deleted changed")
+    if project_deserialized.owner_id == primary_key.user_id:
+        raise HTTPException(status_code=401, detail="The owner cannot be deleted")
     #TODO: Write e-mail to owner and associated users about the deletion
     await project2user.delete(primary_key)
-    await users.delete_kubernetes_user(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.id))
+    await users.delete_kubernetes_user(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=primary_key.user_id))
     return "No record remaining"
 
 """

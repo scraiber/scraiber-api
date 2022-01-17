@@ -68,13 +68,11 @@ jobs:
             kubectl create ns postgresql
             helm install psql bitnami/postgresql --namespace postgresql --set global.postgresql.servicePort=5432 --set global.postgresql.postgresqlDatabase=scraiber_db --set global.postgresql.postgresqlUsername=test_user --set global.postgresql.postgresqlPassword=mypass
             sleep 10
-      - attach_workspace:
-          at: /tmp/workspace
       - run:
-          name: Load archived Docker image and change tag
+          name: Build docker image for tests
           command: |
             eval $(minikube docker-env)
-            docker build -t scraiber/scraiber-api:test ./src
+            docker build -f ./src/Dockerfile.test -t scraiber/scraiber-api:test ./src
       - run:
           name: install Scraiber-API in cluster
           command: |

@@ -20,4 +20,4 @@ fastapi_users = FastAPIUsers(
 )
 
 current_user = fastapi_users.current_user()
-current_active_user = fastapi_users.current_user(verified=True)
+current_verified_user = fastapi_users.current_user(verified=True)

@@ -14,6 +14,30 @@ class ProjectPrimaryKey(BaseModel):
             raise ValueError('must be in the regions offered')
         return field_value
 
+
+
+class ProjectPrimaryKeyEmail(ProjectPrimaryKey):
+    e_mail: EmailStr
+
+class Project2ExternalDB(ProjectPrimaryKeyEmail):
+    is_admin: bool = False
+
+
+
+class PrimaryKeyWithUserID(ProjectPrimaryKey):
+    candidate_id: UUID4
+
+class PrimaryKeyWithUserIDAndCertNo(PrimaryKeyWithUserID):
+    certificate_no: int = Field(..., ge=1)
+
+
+
+class Project2UserDB(ProjectPrimaryKey):
+    user_id: UUID4
+    is_admin: bool = False
+
+    
+
 class ProjectSchema(ProjectPrimaryKey):
     max_project_cpu: float = Field(..., ge=0)
     max_project_mem: float = Field(..., ge=0)
@@ -35,17 +59,9 @@ class ProjectSchema(ProjectPrimaryKey):
 class ProjectSchemaDB(ProjectSchema):
     owner_id: UUID4
 
-class Project2UserDB(ProjectPrimaryKey):
-    user_id: UUID4
-    is_admin: bool = False
-
-class PrimaryKeyWithUserID(ProjectPrimaryKey):
-    candidate_id: UUID4
-
-class PrimaryKeyWithUserIDAndCertNo(PrimaryKeyWithUserID):
-    certificate_no: int = Field(..., ge=1)
-
-class Project2ExternalDB(ProjectPrimaryKey):
+class ProjectSchemaEmail(ProjectSchema):
     e_mail: EmailStr
-    is_admin: bool = False
+
+
+
 

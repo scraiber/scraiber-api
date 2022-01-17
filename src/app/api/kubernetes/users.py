@@ -26,13 +26,12 @@ async def add_user_to_namespace(payload: PrimaryKeyWithUserID):
     except HTTPException:
         #no user added if there is no certificate
         return payload
-
     client_rbacv1api_region = clusters[payload.region]["Client-RbacAuthorizationV1Api"]
 
     role_binding = client.V1RoleBinding(
         metadata=client.V1ObjectMeta(namespace=payload.name, name="user-role-binding-for-"+str(payload.candidate_id)),
         subjects=[client.V1Subject(name=str(payload.candidate_id)+"_"+str(certificate_no), kind="User")],
-        role_ref=client.V1RoleRef(kind="Role", api_group="rbac.authorization.k8s.io", name="user-role-for-"+payload.name))
+        role_ref=client.V1RoleRef(kind="ClusterRole", api_group="rbac.authorization.k8s.io", name="edit"))
         
     try:
         client_rbacv1api_region.create_namespaced_role_binding(namespace=payload.name,body=role_binding)
@@ -61,7 +60,7 @@ async def patch_kubernetes_user(payload: PrimaryKeyWithUserID):
     role_binding = client.V1RoleBinding(
         metadata=client.V1ObjectMeta(namespace=payload.name, name="user-role-binding-for-"+str(payload.candidate_id)),
         subjects=[client.V1Subject(name=str(payload.candidate_id)+"_"+str(certificate_no), kind="User")],
-        role_ref=client.V1RoleRef(kind="Role", api_group="rbac.authorization.k8s.io", name="user-role-for-"+payload.name))
+        role_ref=client.V1RoleRef(kind="ClusterRole", api_group="rbac.authorization.k8s.io", name="edit"))
 
     try:
         client_rbacv1api_region.patch_namespaced_role_binding(name="user-role-binding-for-"+str(payload.candidate_id),namespace=payload.name,body=role_binding)
@@ -79,8 +78,11 @@ async def patch_role_bindings_for_user(payload: Certificate2UserDB):
 
 
 async def delete_kubernetes_user(payload: PrimaryKeyWithUserID):
-    client_rbacv1api_region = clusters[payload.region]["Client-RbacAuthorizationV1Api"]
+    response = await certificates.get(Certificate2User(region=payload.region, user_id=payload.candidate_id))
+    if not response:
+        return payload
 
+    client_rbacv1api_region = clusters[payload.region]["Client-RbacAuthorizationV1Api"]
     try:
         client_rbacv1api_region.delete_namespaced_role_binding(name="user-role-binding-for-"+str(payload.candidate_id), namespace=payload.name)
     except ApiException as e:
