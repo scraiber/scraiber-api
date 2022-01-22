@@ -15,12 +15,3 @@ async def pong():
 async def pong2(email: str):
     await write_test_mail(email)
     return {"ping": "pong2!"}
-
-
-@router.get("/protected-route")
-def protected_route(user: User = Depends(current_user)):
-    return f"Hello, {user.email}"
-
-@router.get("/protected-route2")
-def protected_route2(user: User = Depends(current_verified_user)):
-    return f"Hello, {user.email}"

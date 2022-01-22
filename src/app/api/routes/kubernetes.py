@@ -3,8 +3,11 @@ from fastapi import Depends, HTTPException
 
 from app.api.models.users import User
 from app.api.models.certificates import Certificate2User
+from app.api.models.projects import RegionEmail
 from app.fastapiusers import current_user
 from app.api.kubernetes.users import create_kubernetes_config
+from app.api.email.kubernetes import mail_kubernetes_new_kubeconfig
+from app.kubernetes_setup import cluster_info
 
 
 router = APIRouter()
@@ -15,4 +18,10 @@ async def generate_kubernetes_config_for_user(region: str, user: User = Depends(
     if not response:
         raise HTTPException(status_code=400, detail="Could not create config for user")
     else:
+        await mail_kubernetes_new_kubeconfig(RegionEmail(region=region, e_mail=user.email))
         return {"config": response}
+
+
+@router.get("/clusters", status_code=200)
+async def get_clusters(user: User = Depends(current_user)):
+    return cluster_info

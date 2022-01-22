@@ -1,10 +1,24 @@
 from fastapi.testclient import TestClient
 import json
 
-from .helper_functions import generate_user, generate_project, mock_mail_project_post, mock_mail_project_delete
+from .helper_functions import (
+    generate_user, 
+    generate_project, 
+    mock_mail_project_post, 
+    mock_mail_project_delete,
+    mock_mail_um_post_internal,
+    mock_mail_um_post_internal_owner,
+    mock_mail_um_post_external,
+    mock_mail_um_put_owner,
+    mock_mail_um_put_changed_user,
+    mock_mail_um_delete_external,
+    mock_mail_um_delete_all_externals,
+    mock_mail_um_delete_owner,
+    mock_mail_um_delete_deleted_user,
+    mock_mail_registration_confirmation
+)
 from app.main import app
 from app.fastapiusers import current_user, current_verified_user
-
 
 
 user1 = generate_user()
@@ -16,7 +30,8 @@ project = generate_project()
 project2 = generate_project()
 
 
-def test_auth(client: TestClient, session):
+def test_auth(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.usermanager.mail_registration_confirmation", mock_mail_registration_confirmation)
     #Create user 1
     r =client.post('/auth/register', data=json.dumps({"email": user1.email, "password": "abcd1234"}))
     assert r.status_code == 201
@@ -39,6 +54,9 @@ def test_auth(client: TestClient, session):
 
 def test_user_add(client: TestClient, session, monkeypatch):
     monkeypatch.setattr("app.api.routes.projects.mail_project_post", mock_mail_project_post)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
     #create project 1
     app.dependency_overrides[current_verified_user] = lambda: user1
     response = client.post('projects/', data=json.dumps(project))
@@ -107,7 +125,10 @@ def test_get_users_by_project(client: TestClient):
     assert len(response.json()) == 1
 
 
-def test_put_admin_state(client: TestClient):
+def test_put_admin_state(client: TestClient, monkeypatch):
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_put_owner", mock_mail_um_put_owner)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_put_changed_user", mock_mail_um_put_changed_user)
+
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user2
     response = client.put('project_user_management/admin_state',
@@ -133,7 +154,9 @@ def test_put_admin_state(client: TestClient):
     assert response.status_code == 404
 
 
-def test_delete_external_from_project(client: TestClient, session):
+def test_delete_external_from_project(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_external", mock_mail_um_delete_external)
+
     session.execute("SELECT COUNT(*) FROM public.project2external WHERE name='"+project["name"]+"'")
     assert session.fetchone()[0] == 1    
 
@@ -147,7 +170,12 @@ def test_delete_external_from_project(client: TestClient, session):
     assert session.fetchone()[0] == 0
 
 
-def test_delete_all_externals_from_project(client: TestClient, session):
+def test_delete_all_externals_from_project(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_all_externals", mock_mail_um_delete_all_externals)
+
     session.execute("SELECT COUNT(*) FROM public.project2external WHERE name='"+project["name"]+"'")
     assert session.fetchone()[0] == 0    
 
@@ -171,6 +199,8 @@ def test_delete_all_externals_from_project(client: TestClient, session):
 
 
 def test_delete_user_from_project(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_owner", mock_mail_um_delete_owner)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_deleted_user", mock_mail_um_delete_deleted_user)
     #Delete non-existent project
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1

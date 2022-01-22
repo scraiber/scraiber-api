@@ -39,6 +39,11 @@ async def get_by_user_and_region(payload: Certificate2User):
 
 
 async def put_admin_state(payload: Project2UserDB):
+    proj2user_respponse = await get(payload)
+    if not proj2user_respponse:
+        raise HTTPException(status_code=404, detail="Update item not found")
+    if Project2UserDB(**proj2user_respponse).is_admin == payload.is_admin:
+        raise HTTPException(status_code=403, detail="Admin state would not change") 
     query = (
         project2user
         .update()

@@ -4,3 +4,8 @@
 tests_kubernetes.sh
 chart/scraiber-api/config
 chart/scraiber-api/cluster_dict.json
+src/app/api/email/ping.py
+src/app/api/routes/ping.py
+src/tests/test_ping.py
+.pytest_cache
+**/__pycache__

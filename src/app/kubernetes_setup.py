@@ -5,8 +5,6 @@ from kubernetes import client, config
 
 
 
-clusters = {}
-
 
 def setup_client():
     output = {}
@@ -36,4 +34,6 @@ def setup_client():
         output[key] = cluster_item
     return output
 
+
 clusters = setup_client()
+cluster_info = json.loads(os.environ['CLUSTER_DICT'])

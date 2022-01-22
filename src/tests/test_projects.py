@@ -4,9 +4,21 @@ from kubernetes import client, config
 import os
 import time
 
-from .helper_functions import generate_user, generate_project, mock_mail_project_post, mock_mail_project_put, mock_mail_project_delete
+from .helper_functions import (
+    generate_user, 
+    generate_project, 
+    generate_project_blacklist, 
+    mock_mail_project_post, 
+    mock_mail_project_put, 
+    mock_mail_project_delete,
+    mock_mail_um_post_internal,
+    mock_mail_um_post_internal_owner,
+    mock_mail_um_post_external,
+    mock_mail_registration_confirmation
+)
 from app.main import app
 from app.fastapiusers import current_user, current_verified_user
+from app.kubernetes_setup import clusters
 
 
 cluster_name = json.loads(os.environ['CLUSTER_DICT'])["EU1"]["Config-Name"]
@@ -20,7 +32,8 @@ user2 = generate_user()
 project = generate_project()
 
 
-def test_auth(client: TestClient, session):
+def test_auth(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.usermanager.mail_registration_confirmation", mock_mail_registration_confirmation)
     #Create user 1
     r =client.post('/auth/register', data=json.dumps({"email": user1.email, "password": "abcd1234"}))
     assert r.status_code == 201
@@ -59,6 +72,18 @@ def test_project_create(client: TestClient, session, monkeypatch):
     response = v1.list_namespace()
     names = [item.metadata.name for item in response.items]
     assert (project["name"] in names) == False
+
+    #Create project with e-mail verified but in blacklist - should fail
+    app.dependency_overrides = {}
+    app.dependency_overrides[current_verified_user] = lambda: user1
+    blacklist_name = clusters["EU1"]["blacklist"][0]
+    response = client.post('projects/', data=json.dumps(generate_project_blacklist(blacklist_name)))
+    assert response.status_code == 403
+    session.execute('SELECT COUNT(*) FROM public.projects')
+    assert session.fetchone()[0] == old_number
+    response = v1.list_namespace()
+    names = [item.metadata.name for item in response.items]
+    assert (blacklist_name in names) == True
 
     #Create project with e-mail verified - should work
     app.dependency_overrides = {}
@@ -110,7 +135,11 @@ def test_project_get(client: TestClient):
     assert response.json() == {"detail":"Unauthorized"}
 
 
-def test_project_get_by_user(client: TestClient, session):
+def test_project_get_by_user(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
+
     session.execute("SELECT COUNT(*) FROM public.project2user WHERE name='"+project["name"]+"'")
     assert session.fetchone()[0] == 1
 

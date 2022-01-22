@@ -63,5 +63,13 @@ class ProjectSchemaEmail(ProjectSchema):
     e_mail: EmailStr
 
 
-
+class RegionEmail(BaseModel):
+    region: str
+    e_mail: EmailStr
+    
+    @validator('region')
+    def region_must_be_in_list(cls, field_value):
+        if field_value not in clusters.keys():
+            raise ValueError('must be in the regions offered')
+        return field_value
 

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi_utils.tasks import repeat_every
 
-from app.api.routes import kubernetes, ping, notes, projects, user_management, owner_transfer
+from app.api.routes import kubernetes, ping, projects, user_management, owner_transfer
 from app.db import database, engine, metadata
 from app.fastapiusers import fastapi_users, jwt_authentication
 from app.api.crud import project2external
@@ -37,7 +37,6 @@ async def shutdown():
 
 
 app.include_router(ping.router)
-app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
 app.include_router(user_management.router, prefix="/project_user_management", tags=["project_user_management"])
 app.include_router(owner_transfer.router, prefix="/owner_transfer", tags=["owner_transfer"])

@@ -16,14 +16,18 @@ from app.api.models.projects import (
     ProjectSchemaEmail)
 from app.api.models.users import User
 from app.api.routes.user_management import get_users_by_project
-from app.api.email.projects import mail_project_post, mail_project_put, mail_project_delete
+from app.api.email.projects import *
 from app.fastapiusers import current_user, current_verified_user, get_user_manager
+from app.kubernetes_setup import clusters
 
 router = APIRouter()
 
 
 @router.post("/", response_model=ProjectSchemaDB, status_code=201)
 async def create_project(payload: ProjectSchema, user: User = Depends(current_verified_user)):
+    if payload.name in clusters[payload.region]["blacklist"]:
+        raise HTTPException(status_code=403, detail="Project already exists")
+
     post_project = {
         "name": payload.name,
         "region": payload.region,
@@ -52,13 +56,8 @@ async def create_project(payload: ProjectSchema, user: User = Depends(current_ve
         raise HTTPException(status_code=403, detail="User is already added to project")
 
     await users.add_user_to_namespace(PrimaryKeyWithUserID(name=payload.name, region=payload.region, candidate_id=user.id))
-
-    mail_vars = {
-        "name": payload.name,
-        "region": payload.region,
-        "e_mail": user.email
-    }
     await mail_project_post(ProjectPrimaryKeyEmail(name=payload.name, region=payload.region, e_mail=user.email))
+    
     return post_project
 
 

@@ -1,5 +1,4 @@
 import os
-from pydantic import EmailStr
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 
@@ -34,7 +33,7 @@ async def mail_project_put(payload: ProjectSchemaEmail):
     sender = {"name":"Scraiber","email":"no-reply@scraiber.com"}
     to = [{"email": payload.e_mail}]
 
-    subject = "The resources of project {name} have been updated".format(name=payload.name, region=payload.region)
+    subject = "The resources of project {name} have been updated".format(name=payload.name)
     html_content = """Hi, 
     
 the project {name} in region {region} have been updated to:

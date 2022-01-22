@@ -21,7 +21,7 @@ async def get(primary_key: ProjectPrimaryKey):
 async def get_by_owner(owner_id: uuid):
     query = projects.select().where(owner_id == projects.c.owner_id)
     return await database.fetch_all(query=query)
-
+    
 
 async def owner_check(primary_key: PrimaryKeyWithUserID):
     query = projects.select().where(primary_key.name == projects.c.name).where(primary_key.region == projects.c.region)

@@ -6,10 +6,21 @@ from kubernetes import config
 import random
 import string
 
-from .helper_functions import generate_user, generate_project, mock_mail_project_post, mock_mail_project_delete
+from .helper_functions import (
+    generate_user, 
+    generate_project, 
+    mock_mail_project_post, 
+    mock_mail_project_delete, 
+    mock_mail_kubernetes_new_kubeconfig,
+    mock_mail_um_post_internal,
+    mock_mail_um_post_internal_owner,
+    mock_mail_um_post_external,
+    mock_mail_um_delete_owner,
+    mock_mail_um_delete_deleted_user,
+    mock_mail_registration_confirmation
+)
 from app.main import app
 from app.fastapiusers import current_user, current_verified_user
-
 
 
 cluster_name = json.loads(os.environ['CLUSTER_DICT'])["EU1"]["Config-Name"]
@@ -28,7 +39,8 @@ params = (
 )
 
 
-def test_auth(client: TestClient, session):
+def test_auth(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.usermanager.mail_registration_confirmation", mock_mail_registration_confirmation)
     #Create user 1
     r =client.post('/auth/register', data=json.dumps({"email": user1.email, "password": "abcd1234"}))
     assert r.status_code == 201
@@ -57,8 +69,16 @@ def test_auth(client: TestClient, session):
     user3.hashed_password = session.fetchone()[0]
 
 
+def test_get_cluster_info(client: TestClient):
+    app.dependency_overrides = {}
+    app.dependency_overrides[current_user] = lambda: user1
+    response = client.get('kubernetes/clusters')
+    assert response.status_code == 200
+    assert response.json() == {"EU1": {"Location": "Frankfurt", "Config-Name": "minikube", "blacklist": ["default", "kube-public"]}}
 
-def test_generate_config_without_any_projects_assigned(client: TestClient):
+
+def test_generate_config_without_any_projects_assigned(client: TestClient, monkeypatch):
+    monkeypatch.setattr("app.api.routes.kubernetes.mail_kubernetes_new_kubeconfig", mock_mail_kubernetes_new_kubeconfig)
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
     response = client.get('kubernetes/generate-config', params=params)
@@ -67,6 +87,7 @@ def test_generate_config_without_any_projects_assigned(client: TestClient):
 
 
 def test_generate_config_after_projects_generated(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.api.routes.kubernetes.mail_kubernetes_new_kubeconfig", mock_mail_kubernetes_new_kubeconfig)
     monkeypatch.setattr("app.api.routes.projects.mail_project_post", mock_mail_project_post)
 
     app.dependency_overrides = {}
@@ -110,7 +131,12 @@ def test_generate_config_after_projects_generated(client: TestClient, session, m
 
 
 
-def test_added_and_removed_user(client: TestClient):
+def test_added_and_removed_user(client: TestClient, monkeypatch):
+    monkeypatch.setattr("app.api.routes.kubernetes.mail_kubernetes_new_kubeconfig", mock_mail_kubernetes_new_kubeconfig)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
+
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
     response = client.post('project_user_management/', data=json.dumps({"name": project["name"],"region": project["region"], "e_mail": user2.email}))
@@ -152,7 +178,8 @@ def test_added_and_removed_user(client: TestClient):
         assert rq_json == {'limits.cpu': '10', 'limits.memory': '512Mi'}
         assert lr_json == {'cpu': '100m', 'memory': '64Mi'} 
 
-
+        monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_owner", mock_mail_um_delete_owner)
+        monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_deleted_user", mock_mail_um_delete_deleted_user)
         response = client.delete('project_user_management/user_from_project', 
             data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user2.id}))
         
@@ -180,6 +207,11 @@ def test_added_and_removed_user(client: TestClient):
 
 
 def test_update_kubeconfig(client: TestClient, session, monkeypatch):
+    monkeypatch.setattr("app.api.routes.kubernetes.mail_kubernetes_new_kubeconfig", mock_mail_kubernetes_new_kubeconfig)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
+    monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
+
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
     response = client.post('project_user_management/', 

@@ -32,7 +32,8 @@ with open(store_path_kubeconfig, "w") as store_file:
 kubedict = """{ 
     "EU1": {
         "Location": "Frankfurt",
-        "Config-Name": "minikube"
+        "Config-Name": "minikube",
+        "blacklist": ["default", "kube-public"]
     }
 }"""
 
