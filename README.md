@@ -53,8 +53,9 @@ you can run
 export POSTGRESQL_URL="postgresql://USERNAME:PASSWORD@CLUSTER_ADRESS:PORT/DATABASE"
 export FASTAPI_SECRET=(openssl rand -base64 100)
 export SENDINBLUE_API_KEY=<Your Sendinblue key>
+export DOMAIN_NAME=<Your Domain name, like https://scraiber.com>
 
-helm install scraiber-api ./chart/scraiber-api --namespace backend --set secret.postgresqlURL=$POSTGRESQL_URL --set secret.scraiberAPISecret=$FASTAPI_SECRET --set secret.sendinblueAPIKey=$SENDINBLUE_API_KEY
+helm install scraiber-api ./chart/scraiber-api --namespace backend --set secret.postgresqlURL=$POSTGRESQL_URL --set secret.scraiberAPISecret=$FASTAPI_SECRET --set secret.sendinblueAPIKey=$SENDINBLUE_API_KEY --set secret.domainName=$DOMAIN_NAME
 ```
 
 ## Accessing scraiber-api in the cluster

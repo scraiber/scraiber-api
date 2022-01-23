@@ -26,6 +26,7 @@ serviceAccount:
 secret:
   create: true
   secretName: "scraiber-api-secret"
+  domainName: null
   postgresqlURL: null
   scraiberAPISecret: null
   sendinblueAPIKey: null

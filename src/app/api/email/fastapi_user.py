@@ -10,6 +10,7 @@ configuration = sib_api_v3_sdk.Configuration()
 configuration.api_key['api-key'] = os.getenv("SENDINBLUE_API_KEY")
 api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
+domain_name = os.environ['DOMAIN_NAME']
 
 async def mail_registration_confirmation(email: EmailStr):
     sender = {"name":"Scraiber","email":"no-reply@scraiber.com"}
@@ -38,8 +39,8 @@ async def mail_password_reset(email: EmailStr, token: str):
     subject = "Reset your password at Scraiber"
     html_content = """Hi, 
 
-in order to reset your password at Scraiber, please visit this page <a href="https://scraiber.com/password-reset/?token={token}">here</a>.
-""".format(token=token)
+in order to reset your password at Scraiber, please visit this page <a href="{domain_name}/password-reset/?token={token}">here</a>.
+""".format(domain_name=domain_name, token=token)
 
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(sender=sender, to=to, subject=subject, html_content=html_content)
 
@@ -77,8 +78,8 @@ async def mail_verify_account(email: EmailStr, token: str):
     subject = "Verify your e-mail at Scraiber"
     html_content = """Hi, 
 
-in order to verify your e-mail at Scraiber, please visit this page <a href="https://scraiber.com/verify-account/?token={token}">here</a>.
-""".format(token=token)
+in order to verify your e-mail at Scraiber, please visit this page <a href="{domain_name}/verify-account/?token={token}">here</a>.
+""".format(domain_name=domain_name, token=token)
 
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(sender=sender, to=to, subject=subject, html_content=html_content)
 

@@ -48,6 +48,11 @@ spec:
               secretKeyRef:
                 name: {{ .Values.secret.secretName }}
                 key: SENDINBLUE_API_KEY
+          - name: DOMAIN_NAME
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: DOMAIN_NAME
           - name: CLUSTER_DICT
             valueFrom:
               secretKeyRef:
