@@ -7,7 +7,6 @@ from app.api.models.projects import ProjectSchema, ProjectPrimaryKey
 
 async def create_namespace(project_item: ProjectSchema):
     client_corev1api_region = clusters[project_item.region]["Client-CoreV1Api"]
-    client_rbacv1api_region = clusters[project_item.region]["Client-RbacAuthorizationV1Api"]
     body = client.V1Namespace(
         metadata=client.V1ObjectMeta(
             name=project_item.name))

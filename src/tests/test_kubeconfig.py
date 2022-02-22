@@ -17,10 +17,12 @@ from .helper_functions import (
     mock_mail_um_post_external,
     mock_mail_um_delete_owner,
     mock_mail_um_delete_deleted_user,
-    mock_mail_registration_confirmation
+    mock_mail_registration_confirmation,
+    generate_get_user_by_email,
+    generate_get_user_by_id
 )
 from app.main import app
-from app.fastapiusers import current_user, current_verified_user
+from app.auth0 import current_user
 
 
 cluster_name = json.loads(os.environ['CLUSTER_DICT'])["EU1"]["Config-Name"]
@@ -31,6 +33,10 @@ user1 = generate_user()
 user2 = generate_user()
 user3 = generate_user()
 user4 = generate_user()
+
+get_user_by_email = generate_get_user_by_email([user1, user2, user3, user4])
+get_user_by_id = generate_get_user_by_id([user1, user2, user3, user4])
+
 project = generate_project()
 project2 = generate_project()
 
@@ -38,35 +44,6 @@ params = (
     ('region', 'EU1'),
 )
 
-
-def test_auth(client: TestClient, session, monkeypatch):
-    monkeypatch.setattr("app.usermanager.mail_registration_confirmation", mock_mail_registration_confirmation)
-    #Create user 1
-    r =client.post('/auth/register', data=json.dumps({"email": user1.email, "password": "abcd1234"}))
-    assert r.status_code == 201
-    user1.id = r.json()["id"]
-    assert r.json()["email"] == user1.email
-
-    session.execute("SELECT hashed_password FROM public.user WHERE id = '"+str(user1.id)+"'")
-    user1.hashed_password = session.fetchone()[0]
-
-    #Create user 2
-    r =client.post('/auth/register', data=json.dumps({"email": user2.email, "password": "abcd1234"}))
-    assert r.status_code == 201
-    user2.id = r.json()["id"]
-    assert r.json()["email"] == user2.email
-
-    session.execute("SELECT hashed_password FROM public.user WHERE id = '"+str(user2.id)+"'")
-    user2.hashed_password = session.fetchone()[0]
-
-    #Create user 3
-    r =client.post('/auth/register', data=json.dumps({"email": user3.email, "password": "abcd1234"}))
-    assert r.status_code == 201
-    user3.id = r.json()["id"]
-    assert r.json()["email"] == user3.email
-
-    session.execute("SELECT hashed_password FROM public.user WHERE id = '"+str(user3.id)+"'")
-    user3.hashed_password = session.fetchone()[0]
 
 
 def test_get_cluster_info(client: TestClient):
@@ -91,11 +68,11 @@ def test_generate_config_after_projects_generated(client: TestClient, session, m
     monkeypatch.setattr("app.api.routes.projects.mail_project_post", mock_mail_project_post)
 
     app.dependency_overrides = {}
-    app.dependency_overrides[current_verified_user] = lambda: user1
+    app.dependency_overrides[current_user] = lambda: user1.copy(update={"is_verified": True})
     response = client.post('projects/', data=json.dumps(project))
     response = client.post('projects/', data=json.dumps(project2))
 
-    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user1.id+"'")
+    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user1.user_id+"'")
     assert session.fetchone()[0] == 0
 
     app.dependency_overrides = {}
@@ -108,11 +85,11 @@ def test_generate_config_after_projects_generated(client: TestClient, session, m
         counter += 1
         if "client-certificate-data: None" not in response.json()["config"]:
             invalid_config = False
-    store_name = user1.id+''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))+".yaml"
+    store_name = user1.user_id+''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))+".yaml"
     with open(store_name, "w") as text_file:
         text_file.write(response.json()["config"])
 
-    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user1.id+"'")
+    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user1.user_id+"'")
     assert session.fetchone()[0] == 1
 
     config.load_kube_config(store_name)
@@ -136,6 +113,8 @@ def test_added_and_removed_user(client: TestClient, monkeypatch):
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_email", get_user_by_email)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_id", get_user_by_id)
 
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
@@ -150,7 +129,7 @@ def test_added_and_removed_user(client: TestClient, monkeypatch):
         counter += 1
         if "client-certificate-data: None" not in response.json()["config"]:
             invalid_config = False
-    store_name1 = user2.id+''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))+".yaml"
+    store_name1 = user2.user_id+''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))+".yaml"
     with open(store_name1, "w") as text_file:
         text_file.write(response.json()["config"])
 
@@ -181,7 +160,7 @@ def test_added_and_removed_user(client: TestClient, monkeypatch):
         monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_owner", mock_mail_um_delete_owner)
         monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_deleted_user", mock_mail_um_delete_deleted_user)
         response = client.delete('project_user_management/user_from_project', 
-            data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user2.id}))
+            data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user2.user_id}))
         
         try:
             rq_json = current_api.read_namespaced_resource_quota(name="resource-quota-for-"+project["name"], namespace=project["name"]).status.hard
@@ -196,7 +175,7 @@ def test_added_and_removed_user(client: TestClient, monkeypatch):
         assert lr_json == {'cpu': '100m', 'memory': '64Mi'} 
 
         response = client.delete('project_user_management/user_from_project', 
-            data=json.dumps({"name": project2["name"],"region": project2["region"], "user_id": user2.id}))
+            data=json.dumps({"name": project2["name"],"region": project2["region"], "user_id": user2.user_id}))
 
         try:
             rq_json = current_api.read_namespaced_resource_quota(name="resource-quota-for-"+project2["name"], namespace=project2["name"]).status.hard
@@ -211,6 +190,8 @@ def test_update_kubeconfig(client: TestClient, session, monkeypatch):
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_email", get_user_by_email)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_id", get_user_by_id)
 
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
@@ -219,7 +200,7 @@ def test_update_kubeconfig(client: TestClient, session, monkeypatch):
     response = client.post('project_user_management/', 
         data=json.dumps({"name": project2["name"],"region": project2["region"], "e_mail": user3.email}))
 
-    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.id+"'")
+    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.user_id+"'")
     assert session.fetchone()[0] == 0
 
     app.dependency_overrides[current_user] = lambda: user3
@@ -231,13 +212,13 @@ def test_update_kubeconfig(client: TestClient, session, monkeypatch):
         counter += 1
         if "client-certificate-data: None" not in response.json()["config"]:
             invalid_config = False
-    store_name1 = user2.id+''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))+".yaml"
+    store_name1 = user2.user_id+''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))+".yaml"
     with open(store_name1, "w") as text_file:
         text_file.write(response.json()["config"])
 
-    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.id+"'")
+    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.user_id+"'")
     assert session.fetchone()[0] == 1
-    session.execute("SELECT certificate_no FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.id+"'")
+    session.execute("SELECT certificate_no FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.user_id+"'")
     current_certificate_no = session.fetchone()[0]
 
     config.load_kube_config(store_name1)
@@ -261,13 +242,13 @@ def test_update_kubeconfig(client: TestClient, session, monkeypatch):
         counter += 1
         if "client-certificate-data: None" not in response.json()["config"]:
             invalid_config = False
-    store_name2 = user2.id+''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))+".yaml"
+    store_name2 = user2.user_id+''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))+".yaml"
     with open(store_name2, "w") as text_file:
         text_file.write(response.json()["config"])
 
-    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.id+"'")
+    session.execute("SELECT COUNT(*) FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.user_id+"'")
     assert session.fetchone()[0] == 1
-    session.execute("SELECT certificate_no FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.id+"'")
+    session.execute("SELECT certificate_no FROM public.certificate2user WHERE region='EU1' AND user_id='"+user3.user_id+"'")
     new_certificate_no = session.fetchone()[0]
     assert new_certificate_no > current_certificate_no
 

@@ -38,11 +38,31 @@ spec:
               secretKeyRef:
                 name: {{ .Values.secret.secretName }}
                 key: DATABASE_URL
-          - name: SCRAIBER_API_SECRET
+          - name: AUTH0_DOMAIN
             valueFrom:
               secretKeyRef:
                 name: {{ .Values.secret.secretName }}
-                key: SCRAIBER_API_SECRET
+                key: AUTH0_DOMAIN
+          - name: AUTH0_CLIENTID_FRONTEND
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: AUTH0_CLIENTID_FRONTEND
+          - name: AUTH0_CLIENTID_BACKEND
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: AUTH0_CLIENTID_BACKEND
+          - name: AUTH0_CLIENT_SECRET_BACKEND
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: AUTH0_CLIENT_SECRET_BACKEND
+          - name: AUTH0_AUDIENCE
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secret.secretName }}
+                key: AUTH0_AUDIENCE
           - name: SENDINBLUE_API_KEY
             valueFrom:
               secretKeyRef:

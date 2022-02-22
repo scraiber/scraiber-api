@@ -28,7 +28,11 @@ secret:
   secretName: "scraiber-api-secret"
   domainName: null
   postgresqlURL: null
-  scraiberAPISecret: null
+  auth0_domain: null
+  auth0_clientid_frontend: null
+  auth0_clientid_backend: null
+  auth0_client_secret_backend: null
+  auth0_audience: null
   sendinblueAPIKey: null
   clusterDict: null
   

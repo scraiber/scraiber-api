@@ -1,8 +1,6 @@
 from fastapi import APIRouter
 from fastapi import Depends
 
-from app.api.models.users import User
-from app.fastapiusers import current_user, current_verified_user
 from app.api.email.ping import write_test_mail
 
 router = APIRouter()

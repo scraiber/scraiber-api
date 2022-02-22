@@ -3,7 +3,10 @@ import json
 from kubernetes import client, config
 import os
 import time
+from typing import List
+from pydantic import EmailStr
 
+from app.api.models.auth0 import Auth0User
 from .helper_functions import (
     generate_user, 
     generate_project, 
@@ -13,11 +16,11 @@ from .helper_functions import (
     mock_mail_project_delete,
     mock_mail_um_post_internal,
     mock_mail_um_post_internal_owner,
-    mock_mail_um_post_external,
-    mock_mail_registration_confirmation
+    mock_mail_um_post_external
 )
 from app.main import app
-from app.fastapiusers import current_user, current_verified_user
+from app.auth0 import current_user
+
 from app.kubernetes_setup import clusters
 
 
@@ -29,28 +32,32 @@ v1=client.CoreV1Api()
 
 user1 = generate_user()
 user2 = generate_user()
+user_list = [user1, user2]
+
+
+#get_user_by_email = generate_get_user_by_email([user1, user2])
+#get_user_by_id = generate_get_user_by_id([user1, user2])
+
+
+async def get_user_by_email(email: EmailStr) -> Auth0User:
+    for user in user_list:
+        if user.email == email:
+            return user
+
+async def get_user_by_id(id: str) -> Auth0User:
+    for user in user_list:
+        if user.user_id == id:
+            return user
+
+async def get_user_list_by_id(id_list: List[str]) -> List[Auth0User]:
+    output_list = []
+    for user in user_list:
+        if user.user_id in id_list:
+            output_list.append(user)
+    return output_list
+
 project = generate_project()
 
-
-def test_auth(client: TestClient, session, monkeypatch):
-    monkeypatch.setattr("app.usermanager.mail_registration_confirmation", mock_mail_registration_confirmation)
-    #Create user 1
-    r =client.post('/auth/register', data=json.dumps({"email": user1.email, "password": "abcd1234"}))
-    assert r.status_code == 201
-    user1.id = r.json()["id"]
-    assert r.json()["email"] == user1.email
-
-    session.execute("SELECT hashed_password FROM public.user WHERE id = '"+str(user1.id)+"'")
-    user1.hashed_password = session.fetchone()[0]
-
-    #Create user 2
-    r =client.post('/auth/register', data=json.dumps({"email": user2.email, "password": "abcd1234"}))
-    assert r.status_code == 201
-    user2.id = r.json()["id"]
-    assert r.json()["email"] == user2.email
-
-    session.execute("SELECT hashed_password FROM public.user WHERE id = '"+str(user2.id)+"'")
-    user2.hashed_password = session.fetchone()[0]
 
 
 def test_project_create(client: TestClient, session, monkeypatch):
@@ -75,7 +82,7 @@ def test_project_create(client: TestClient, session, monkeypatch):
 
     #Create project with e-mail verified but in blacklist - should fail
     app.dependency_overrides = {}
-    app.dependency_overrides[current_verified_user] = lambda: user1
+    app.dependency_overrides[current_user] = lambda: user1.copy(update={"is_verified": True})
     blacklist_name = clusters["EU1"]["blacklist"][0]
     response = client.post('projects/', data=json.dumps(generate_project_blacklist(blacklist_name)))
     assert response.status_code == 403
@@ -87,7 +94,7 @@ def test_project_create(client: TestClient, session, monkeypatch):
 
     #Create project with e-mail verified - should work
     app.dependency_overrides = {}
-    app.dependency_overrides[current_verified_user] = lambda: user1
+    app.dependency_overrides[current_user] = lambda: user1.copy(update={"is_verified": True})
     response = client.post('projects/', data=json.dumps(project))
     assert response.status_code == 201
     session.execute('SELECT COUNT(*) FROM public.projects')
@@ -114,7 +121,7 @@ def test_project_get(client: TestClient):
     response = client.get('projects/', data=json.dumps(data))
     assert response.status_code == 200
     test_json = project.copy()
-    test_json.update({"owner_id": user1.id})
+    test_json.update({"owner_id": user1.user_id})
     assert response.json() == test_json
 
     #non-existent project
@@ -132,13 +139,15 @@ def test_project_get(client: TestClient):
     app.dependency_overrides = {}
     response = client.get('projects/', data=json.dumps(data))
     assert response.status_code == 401
-    assert response.json() == {"detail":"Unauthorized"}
+    assert response.json() == {"detail":"Not authenticated"}
 
 
 def test_project_get_by_user(client: TestClient, session, monkeypatch):
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_email", get_user_by_email)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_id", get_user_by_id)
 
     session.execute("SELECT COUNT(*) FROM public.project2user WHERE name='"+project["name"]+"'")
     assert session.fetchone()[0] == 1
@@ -173,7 +182,7 @@ def test_project_get_by_owner(client: TestClient):
     response = client.get('projects/by_owner')
     assert response.status_code == 200
     test_json = project.copy()
-    test_json.update({"owner_id": user1.id})
+    test_json.update({"owner_id": user1.user_id})
     assert response.json()[0] == test_json
     assert len(response.json()) == 1
 
@@ -186,11 +195,12 @@ def test_project_get_by_owner(client: TestClient):
     app.dependency_overrides = {}
     response = client.get('projects/by_owner')
     assert response.status_code == 401
-    assert response.json() == {"detail":"Unauthorized"}
+    assert response.json() == {"detail":"Not authenticated"}
 
 
 def test_project_update_cpu_memory(client: TestClient, monkeypatch):
     monkeypatch.setattr("app.api.routes.projects.mail_project_put", mock_mail_project_put)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_list_by_id", get_user_list_by_id)
 
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
@@ -210,11 +220,12 @@ def test_project_update_cpu_memory(client: TestClient, monkeypatch):
     app.dependency_overrides = {}
     response = client.put('projects/update_cpu_memory', data=json.dumps(data))
     assert response.status_code == 401
-    assert response.json() == {"detail":"Unauthorized"}
+    assert response.json() == {"detail":"Not authenticated"}
 
 
 def test_delete(client: TestClient, session, monkeypatch):
     monkeypatch.setattr("app.api.routes.projects.mail_project_delete", mock_mail_project_delete)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_list_by_id", get_user_list_by_id)
 
     session.execute('SELECT COUNT(*) FROM public.projects')
     current_no = session.fetchone()[0]
@@ -239,4 +250,4 @@ def test_delete(client: TestClient, session, monkeypatch):
     app.dependency_overrides = {}
     response = client.delete('projects/', data=json.dumps(data))
     assert response.status_code == 401
-    assert response.json() == {"detail":"Unauthorized"}    
+    assert response.json() == {"detail":"Not authenticated"}    

@@ -1,9 +1,9 @@
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field
 
 
 class Certificate2User(BaseModel):
     region: str
-    user_id: UUID4
+    user_id: str
 
 
 class Certificate2UserDB(Certificate2User):

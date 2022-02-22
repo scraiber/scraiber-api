@@ -12,15 +12,10 @@ from sqlalchemy import (
     create_engine
 )
 from sqlalchemy.sql import func
-from fastapi_users.db import SQLAlchemyBaseUserTable, SQLAlchemyUserDatabase
 from sqlalchemy.ext.declarative import DeclarativeMeta, declarative_base
-from sqlalchemy.dialects.postgresql import UUID
 
-import uuid
 
 from databases import Database
-
-from app.api.models.users import User, UserDB
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -28,14 +23,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # SQLAlchemy
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
-notes = Table(
-    "notes",
-    metadata,
-    Column("id", Integer, primary_key=True),
-    Column("title", String(50)),
-    Column("description", String(50)),
-    Column("created_date", DateTime, default=func.now(), nullable=False),
-)
+
 projects = Table(
     "projects",
     metadata,
@@ -45,7 +33,7 @@ projects = Table(
     Column("max_project_mem", Float),
     Column("default_limit_pod_cpu", Float),
     Column("default_limit_pod_mem", Float),
-    Column("owner_id", UUID),
+    Column("owner_id", String),
     Column("created_date", DateTime, default=func.now(), nullable=False),
 )
 project2user = Table(
@@ -53,7 +41,7 @@ project2user = Table(
     metadata,
     Column("name", String(50), primary_key=True),
     Column("region", String, primary_key=True),
-    Column("user_id", UUID, primary_key=True),
+    Column("user_id", String, primary_key=True),
     Column("is_admin", Boolean, default=False, nullable=False),
     Column("created_date", DateTime, default=func.now(), nullable=False),
 )
@@ -62,7 +50,7 @@ project2ownercandidate = Table(
     metadata,
     Column("name", String(50), primary_key=True),
     Column("region", String, primary_key=True),
-    Column("candidate_id", UUID),
+    Column("candidate_id", String),
     Column("created_date", DateTime, default=func.now(), nullable=False),
 )
 project2external = Table(
@@ -78,7 +66,7 @@ certificate2user = Table(
     "certificate2user",
     metadata,
     Column("region", String, primary_key=True),
-    Column("user_id", UUID, primary_key=True),
+    Column("user_id", String, primary_key=True),
     Column("certificate_no", Integer, nullable=False),
     Column("created_date", DateTime, default=func.now(), nullable=False),
 )
@@ -89,12 +77,4 @@ database = Database(DATABASE_URL)
 
 Base: DeclarativeMeta = declarative_base()
 
-class UserTable(Base, SQLAlchemyBaseUserTable):
-    pass
-
 Base.metadata.create_all(engine)
-
-users = UserTable.__table__
-
-async def get_user_db():
-    yield SQLAlchemyUserDatabase(UserDB, database, users)

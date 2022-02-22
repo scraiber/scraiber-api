@@ -1,11 +1,8 @@
 import uuid
-from typing import List
 from fastapi import HTTPException
 
 from app.api.models.projects import ProjectPrimaryKey, ProjectSchema, ProjectSchemaDB, PrimaryKeyWithUserID
 from app.db import projects, database
-
-#from sqlalchemy import tuple_
 
 
 async def post(payload: ProjectSchemaDB):
@@ -29,12 +26,6 @@ async def owner_check(primary_key: PrimaryKeyWithUserID):
     if not project or ProjectSchemaDB(**project).owner_id != primary_key.candidate_id:
         raise HTTPException(status_code=404, detail="Project not found or user not owner")
 
-'''
-async def get_many(primary_keys: List[(ProjectPrimaryKey)]):
-    primary_keys_query = [(item["name"], item["region"]) for item in primary_keys]
-    query = projects.select().where(tuple_(projects.c.name, projects.c.region).in_(primary_keys_query))
-    return await database.fetch_all(query=query)
-'''
 
 async def put_cpu_mem(payload: ProjectSchema):
     query = (

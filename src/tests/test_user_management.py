@@ -1,5 +1,11 @@
 from fastapi.testclient import TestClient
 import json
+from typing import List
+from pydantic import EmailStr
+from fastapi import HTTPException
+
+from app.api.models.auth0 import Auth0User
+from app.api.auth0.users import get_user_by_email
 
 from .helper_functions import (
     generate_user, 
@@ -14,42 +20,47 @@ from .helper_functions import (
     mock_mail_um_delete_external,
     mock_mail_um_delete_all_externals,
     mock_mail_um_delete_owner,
-    mock_mail_um_delete_deleted_user,
-    mock_mail_registration_confirmation
+    mock_mail_um_delete_deleted_user
 )
 from app.main import app
-from app.fastapiusers import current_user, current_verified_user
+from app.auth0 import current_user
 
 
 user1 = generate_user()
 user2 = generate_user()
 user3 = generate_user()
 user4 = generate_user()
+user_list1 = [user1, user2]
+user_list2 = [user3, user4]
+
+
+async def get_user_by_email(email: EmailStr) -> Auth0User:
+    for user in user_list1:
+        if user.email == email:
+            return user
+    for user in user_list2:
+        if user.email == email:
+            raise HTTPException(status_code=404, detail="User could not be retrieved")
+
+
+async def get_user_by_id(id: str) -> Auth0User:
+    for user in user_list1:
+        if user.user_id == id:
+            return user
+    for user in user_list2:
+        if user.user_id == id:
+            raise HTTPException(status_code=404, detail="User could not be retrieved")
+
+async def get_user_list_by_id(id_list: List[str]) -> List[Auth0User]:
+    output_list = []
+    for user in user_list1:
+        if user.user_id in id_list:
+            output_list.append(user)
+    return output_list
 
 project = generate_project()
 project2 = generate_project()
 
-
-def test_auth(client: TestClient, session, monkeypatch):
-    monkeypatch.setattr("app.usermanager.mail_registration_confirmation", mock_mail_registration_confirmation)
-    #Create user 1
-    r =client.post('/auth/register', data=json.dumps({"email": user1.email, "password": "abcd1234"}))
-    assert r.status_code == 201
-
-    user1.id = r.json()["id"]
-    assert r.json()["email"] == user1.email
-
-    session.execute("SELECT hashed_password FROM public.user WHERE id = '"+str(user1.id)+"'")
-    user1.hashed_password = session.fetchone()[0]
-
-    #Create user 2
-    r =client.post('/auth/register', data=json.dumps({"email": user2.email, "password": "abcd1234"}))
-    assert r.status_code == 201
-    user2.id = r.json()["id"]
-    assert r.json()["email"] == user2.email
-
-    session.execute("SELECT hashed_password FROM public.user WHERE id = '"+str(user2.id)+"'")
-    user2.hashed_password = session.fetchone()[0]
 
 
 def test_user_add(client: TestClient, session, monkeypatch):
@@ -57,8 +68,11 @@ def test_user_add(client: TestClient, session, monkeypatch):
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal", mock_mail_um_post_internal)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_email", get_user_by_email)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_id", get_user_by_id)
+
     #create project 1
-    app.dependency_overrides[current_verified_user] = lambda: user1
+    app.dependency_overrides[current_user] = lambda: user1.copy(update={"is_verified": True})
     response = client.post('projects/', data=json.dumps(project))
     #create project 2
     response = client.post('projects/', data=json.dumps(project2))
@@ -91,6 +105,7 @@ def test_user_add(client: TestClient, session, monkeypatch):
     app.dependency_overrides[current_user] = lambda: user1
     response = client.post('project_user_management/',
         data=json.dumps({"name": project["name"],"region": project["region"], "e_mail": user3.email}))
+    print(response.json())
     assert response.status_code == 201
     session.execute("SELECT COUNT(*) FROM public.project2external WHERE name='"+project["name"]+"'")
     assert session.fetchone()[0] == 1
@@ -111,7 +126,9 @@ def test_get_externals_by_project(client: TestClient):
     assert response.status_code == 404
 
 
-def test_get_users_by_project(client: TestClient):
+def test_get_users_by_project(client: TestClient, monkeypatch):
+    monkeypatch.setattr("app.api.routes.user_management.get_user_list_by_id", get_user_list_by_id)
+
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
     response = client.get('project_user_management/users_by_project',
@@ -128,34 +145,36 @@ def test_get_users_by_project(client: TestClient):
 def test_put_admin_state(client: TestClient, monkeypatch):
     monkeypatch.setattr("app.api.routes.user_management.mail_um_put_owner", mock_mail_um_put_owner)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_put_changed_user", mock_mail_um_put_changed_user)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_id", get_user_by_id)
 
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user2
     response = client.put('project_user_management/admin_state',
-        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user1.id, "is_admin": False}))
+        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user1.user_id, "is_admin": False}))
     assert response.status_code == 401
     assert response.json()["detail"] == "Project for user not found or user not admin"
 
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
     response = client.put('project_user_management/admin_state',
-        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user2.id, "is_admin": True}))
+        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user2.user_id, "is_admin": True}))
     assert response.status_code == 200
 
     app.dependency_overrides[current_user] = lambda: user2
     response = client.put('project_user_management/admin_state',
-        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user1.id, "is_admin": False}))
+        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user1.user_id, "is_admin": False}))
     assert response.status_code == 401
     assert response.json()["detail"] == "The owner's admin state cannot be changed"
 
     app.dependency_overrides[current_user] = lambda: user1
     response = client.put('project_user_management/admin_state',
-        data=json.dumps({"name": project2["name"],"region": project2["region"], "user_id": user2.id, "is_admin": True}))
+        data=json.dumps({"name": project2["name"],"region": project2["region"], "user_id": user2.user_id, "is_admin": True}))
     assert response.status_code == 404
 
 
 def test_delete_external_from_project(client: TestClient, session, monkeypatch):
     monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_external", mock_mail_um_delete_external)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_id", get_user_by_id)
 
     session.execute("SELECT COUNT(*) FROM public.project2external WHERE name='"+project["name"]+"'")
     assert session.fetchone()[0] == 1    
@@ -175,6 +194,8 @@ def test_delete_all_externals_from_project(client: TestClient, session, monkeypa
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_internal_owner", mock_mail_um_post_internal_owner)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_post_external", mock_mail_um_post_external)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_all_externals", mock_mail_um_delete_all_externals)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_email", get_user_by_email)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_id", get_user_by_id)
 
     session.execute("SELECT COUNT(*) FROM public.project2external WHERE name='"+project["name"]+"'")
     assert session.fetchone()[0] == 0    
@@ -201,17 +222,19 @@ def test_delete_all_externals_from_project(client: TestClient, session, monkeypa
 def test_delete_user_from_project(client: TestClient, session, monkeypatch):
     monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_owner", mock_mail_um_delete_owner)
     monkeypatch.setattr("app.api.routes.user_management.mail_um_delete_deleted_user", mock_mail_um_delete_deleted_user)
+    monkeypatch.setattr("app.api.routes.user_management.get_user_by_id", get_user_by_id)
+
     #Delete non-existent project
     app.dependency_overrides = {}
     app.dependency_overrides[current_user] = lambda: user1
     response = client.delete('project_user_management/user_from_project',
-        data=json.dumps({"name": "nonesense-name","region": project["region"], "user_id": user2.id}))
+        data=json.dumps({"name": "nonesense-name","region": project["region"], "user_id": user2.user_id}))
     assert response.json()["detail"] == "Project for user not found or user not admin"
     assert response.status_code == 401
 
     app.dependency_overrides[current_user] = lambda: user2
     response = client.delete('project_user_management/user_from_project',
-        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user1.id}))
+        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user1.user_id}))
     assert response.json()["detail"] == "The owner cannot be deleted"
     assert response.status_code == 401
 
@@ -220,7 +243,7 @@ def test_delete_user_from_project(client: TestClient, session, monkeypatch):
 
     app.dependency_overrides[current_user] = lambda: user1
     response = client.delete('project_user_management/user_from_project',
-        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user2.id}))
+        data=json.dumps({"name": project["name"],"region": project["region"], "user_id": user2.user_id}))
     assert response.status_code == 200
 
     session.execute("SELECT COUNT(*) FROM public.project2user WHERE name='"+project["name"]+"'")

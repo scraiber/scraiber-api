@@ -1,5 +1,4 @@
 import uuid
-import datetime
 from app.api.models.projects import PrimaryKeyWithUserID, ProjectPrimaryKey
 from app.db import project2ownercandidate, database
 

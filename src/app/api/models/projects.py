@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, UUID4, validator, EmailStr, root_validator
+from pydantic import BaseModel, Field, validator, EmailStr, root_validator
 from typing import Dict, Any
 
 from app.kubernetes_setup import clusters
@@ -25,7 +25,7 @@ class Project2ExternalDB(ProjectPrimaryKeyEmail):
 
 
 class PrimaryKeyWithUserID(ProjectPrimaryKey):
-    candidate_id: UUID4
+    candidate_id: str
 
 class PrimaryKeyWithUserIDAndCertNo(PrimaryKeyWithUserID):
     certificate_no: int = Field(..., ge=1)
@@ -33,7 +33,7 @@ class PrimaryKeyWithUserIDAndCertNo(PrimaryKeyWithUserID):
 
 
 class Project2UserDB(ProjectPrimaryKey):
-    user_id: UUID4
+    user_id: str
     is_admin: bool = False
 
     
@@ -57,7 +57,7 @@ class ProjectSchema(ProjectPrimaryKey):
         return values
 
 class ProjectSchemaDB(ProjectSchema):
-    owner_id: UUID4
+    owner_id: str
 
 class ProjectSchemaEmail(ProjectSchema):
     e_mail: EmailStr
