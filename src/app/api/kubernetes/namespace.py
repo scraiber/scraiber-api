@@ -2,18 +2,18 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 
 from app.kubernetes_setup import clusters
-from app.api.models.projects import ProjectSchema, ProjectPrimaryKey
+from app.api.models.namespaces import NamespacePrimaryKey, NamespaceSchema, NamespaceResources
 
 
-async def create_namespace(project_item: ProjectSchema):
+async def create_namespace(project_item: NamespaceSchema):
     client_corev1api_region = clusters[project_item.region]["Client-CoreV1Api"]
     body = client.V1Namespace(
         metadata=client.V1ObjectMeta(
             name=project_item.name))
 
     rq_spec = {
-        "limits.cpu": str(project_item.max_project_cpu),
-        "limits.memory": str(project_item.max_project_mem)+"Mi"
+        "limits.cpu": str(project_item.max_namespace_cpu),
+        "limits.memory": str(project_item.max_namespace_mem)+"Mi"
     }
     rq = client.V1ResourceQuota(
         metadata=client.V1ObjectMeta(name="resource-quota-for-"+project_item.name),
@@ -36,12 +36,12 @@ async def create_namespace(project_item: ProjectSchema):
     return project_item
 
 
-async def update_namespace(project_item: ProjectSchema):
+async def update_namespace(project_item: NamespaceResources):
     client_corev1api_region = clusters[project_item.region]["Client-CoreV1Api"]
 
     rq_spec = {
-        "limits.cpu": str(project_item.max_project_cpu),
-        "limits.memory": str(project_item.max_project_mem)+"Mi"
+        "limits.cpu": str(project_item.max_namespace_cpu),
+        "limits.memory": str(project_item.max_namespace_mem)+"Mi"
     }
     rq = client.V1ResourceQuota(spec=client.V1ResourceQuotaSpec(hard=rq_spec))
 
@@ -59,7 +59,7 @@ async def update_namespace(project_item: ProjectSchema):
     return project_item
 
 
-async def delete_namespace(project_item: ProjectPrimaryKey):
+async def delete_namespace(project_item: NamespacePrimaryKey):
     client_corev1api_region = clusters[project_item.region]["Client-CoreV1Api"]
 
     delete_body = client.V1DeleteOptions()
@@ -67,5 +67,5 @@ async def delete_namespace(project_item: ProjectPrimaryKey):
     try:
         client_corev1api_region.delete_namespace(body=delete_body, name=project_item.name)
     except ApiException as e:
-        print("Exception when trying to update resource quote of namespace: %s\n" % e)
+        print("Exception when trying to delete namespace: %s\n" % e)
     return project_item

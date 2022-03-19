@@ -8,7 +8,6 @@ from app.api.models.auth0 import Auth0User
 
 
 async def get_user_by_email(email: EmailStr) -> Auth0User:
-
     headers = {'Authorization': 'Bearer '+os.environ["ACCESS_TOKEN"]}
     params = {'email': email, 'fields': 'email,email_verified,nickname,name,user_id'}
 
@@ -23,7 +22,6 @@ async def get_user_by_email(email: EmailStr) -> Auth0User:
 
 
 async def get_user_by_id(id: str) -> Auth0User:
-
     headers = {'Authorization': 'Bearer '+os.environ["ACCESS_TOKEN"]}
     params = {'fields': 'email,email_verified,nickname,name,user_id'}
 
@@ -59,7 +57,6 @@ async def get_user_list_by_email(email_list: List[EmailStr], require_200_status_
 
 async def get_user_list_by_id(id_list: List[str], require_200_status_code: bool = False) -> List[Auth0User]:
     output_list = []
-
     for id in id_list:
         if require_200_status_code:
             user = await get_user_by_id(id)

@@ -1,0 +1,35 @@
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ4VENDQVd5Z0F3SUJBZ0lSQU5zTVdQQzlPRnN2bEx0QUNWUlp3eGN3Q2dZSUtvWkl6ajBFQXdJd01qRXcKTUM0R0ExVUVBeE1uVUdsdWJtbHdaV1FnU1cxd1pYSnpiMjVoZEdsdmJpQlFjbTk0ZVNCVFpYSjJhVzVuSUVOQgpNQ0FYRFRJeU1ESXlNakUwTXpRME1Gb1lEekl4TWpJd01USTVNVFF6T1RRd1dqQXlNVEF3TGdZRFZRUURFeWRRCmFXNXVhWEJsWkNCSmJYQmxjbk52Ym1GMGFXOXVJRkJ5YjNoNUlGTmxjblpwYm1jZ1EwRXdXVEFUQmdjcWhrak8KUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVJQQ0FNclNiTGYveXVLc0g1azREdUp0SWNQUkhqdUNCQUJYT01UZ3R1ZApMZ1NScDdQb2UzY1VWMEZZTTVaU2RWamhDWkpLVHR3djlYLysrUHlIUmhMcm8yRXdYekFPQmdOVkhROEJBZjhFCkJBTUNBb1F3SFFZRFZSMGxCQll3RkFZSUt3WUJCUVVIQXdJR0NDc0dBUVVGQndNQk1BOEdBMVVkRXdFQi93UUYKTUFNQkFmOHdIUVlEVlIwT0JCWUVGRXR3L2tMalkrak8zWWdia2FTK3VSQldqd05PTUFvR0NDcUdTTTQ5QkFNQwpBMGNBTUVRQ0lBT0VhZGRxd3BBejZLVmI2bzZVREVQd2lhWnk2bm9uQm9oTWtDVndTazlrQWlBdTk2QjNCbU9uCkJoYU5NL29NUFBtMis5OTZiaFVQRUF3Z1VOcUZlMkVkK0E9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+    server: https://161.35.248.164
+  name: EU1
+contexts:
+- context:
+    cluster: EU1
+    user: EU1-user
+  name: EU1
+current-context: EU1
+kind: Config
+preferences: {}
+users:
+- name: EU1-user
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1beta1
+      args:
+      - login
+      - oidc
+      - --enable-concierge
+      - --concierge-api-group-suffix=pinniped.dev
+      - --concierge-authenticator-name=jwt-authenticator
+      - --concierge-authenticator-type=jwt
+      - --concierge-endpoint=https://161.35.248.164
+      - --concierge-ca-bundle-data=LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ4VENDQVd5Z0F3SUJBZ0lSQU5zTVdQQzlPRnN2bEx0QUNWUlp3eGN3Q2dZSUtvWkl6ajBFQXdJd01qRXcKTUM0R0ExVUVBeE1uVUdsdWJtbHdaV1FnU1cxd1pYSnpiMjVoZEdsdmJpQlFjbTk0ZVNCVFpYSjJhVzVuSUVOQgpNQ0FYRFRJeU1ESXlNakUwTXpRME1Gb1lEekl4TWpJd01USTVNVFF6T1RRd1dqQXlNVEF3TGdZRFZRUURFeWRRCmFXNXVhWEJsWkNCSmJYQmxjbk52Ym1GMGFXOXVJRkJ5YjNoNUlGTmxjblpwYm1jZ1EwRXdXVEFUQmdjcWhrak8KUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVJQQ0FNclNiTGYveXVLc0g1azREdUp0SWNQUkhqdUNCQUJYT01UZ3R1ZApMZ1NScDdQb2UzY1VWMEZZTTVaU2RWamhDWkpLVHR3djlYLysrUHlIUmhMcm8yRXdYekFPQmdOVkhROEJBZjhFCkJBTUNBb1F3SFFZRFZSMGxCQll3RkFZSUt3WUJCUVVIQXdJR0NDc0dBUVVGQndNQk1BOEdBMVVkRXdFQi93UUYKTUFNQkFmOHdIUVlEVlIwT0JCWUVGRXR3L2tMalkrak8zWWdia2FTK3VSQldqd05PTUFvR0NDcUdTTTQ5QkFNQwpBMGNBTUVRQ0lBT0VhZGRxd3BBejZLVmI2bzZVREVQd2lhWnk2bm9uQm9oTWtDVndTazlrQWlBdTk2QjNCbU9uCkJoYU5NL29NUFBtMis5OTZiaFVQRUF3Z1VOcUZlMkVkK0E9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+      - --issuer=https://scraiber.eu.auth0.com/
+      - --client-id=dy4wrYqDLMcBgggBhThnSGvh8fqnz4ho
+      - --scopes=openid,email
+      - --listen-port=12345
+      - --request-audience=dy4wrYqDLMcBgggBhThnSGvh8fqnz4ho
+      command: /usr/local/bin/pinniped
+      provideClusterInfo: true
