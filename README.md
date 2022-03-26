@@ -8,6 +8,9 @@ The scraiber-api is a backend API (based on FastAPI), that enables users to acce
 
 - One or more Kubernetes clusters (our software has been tested on Digitalocean)
 - A Postgresql database running (we will need an access string)
+- A tenant at auth0
+  - Create a `single page application` with allowed callback URL http://127.0.0.1:12345/callback
+  - Create a `machine-to-machine` app and authorize `https://your-domain.auth0.com/api/v2/` such that you can `read:users`, `delete:users`, `read:user_idp_tokens`
 - `kubectl` installed
 - `helm` installed
 - A kubeconfig file with contexts for all clusters, named `config`
@@ -20,12 +23,16 @@ The file `cluster_dict.json` has to look like
     "EU1": {
         "Location": "Frankfurt",
         "Config-Name": <Config name for respective cluster in config file>,
-        "blacklist": <a list of blacklisted namespaces for this cluster like ["default", "kube-public"]>
+        "blacklist": <a list of blacklisted namespaces for this cluster like ["default", "kube-public"]>,
+        "concierge-endpoint": <your-pinniped endpoint for this cluster>,
+        "certificate-authority-data": <your certifiacte for pinniped for this cluster>
     },
     "US1": {
         "Location": "New York",
         "Config-Name": <Config name for respective cluster in config file>,
-        "blacklist":  <a list of blacklisted namespaces for this cluster like ["default", "kube-public"]>
+        "blacklist":  <a list of blacklisted namespaces for this cluster like ["default", "kube-public"]>,
+        "concierge-endpoint": <your-pinniped endpoint for this cluster>,
+        "certificate-authority-data": <your certifiacte for pinniped for this cluster>
     }    
 }
 ```
@@ -51,11 +58,23 @@ you can run
 
 ```
 export POSTGRESQL_URL="postgresql://USERNAME:PASSWORD@CLUSTER_ADRESS:PORT/DATABASE"
-export FASTAPI_SECRET=(openssl rand -base64 100)
 export SENDINBLUE_API_KEY=<Your Sendinblue key>
 export DOMAIN_NAME=<Your Domain name, like https://scraiber.com>
+export AUTH0_DOMAIN='<your-auth0-domain>.auth0.com'
+export AUTH0_CLIENTID_FRONTEND=<your-auth0-frontend-client-id>
+export AUTH0_CLIENTID_BACKEND=<your-auth0-backend-client-id>
+export AUTH0_CLIENT_SECRET_BACKEND=<your-auth0-backend-client-secret>
+export AUTH0_AUDIENCE='https://<your-auth0-domain>.eu.auth0.com/api/v2/'
 
-helm install scraiber-api ./chart/scraiber-api --namespace backend --set secret.postgresqlURL=$POSTGRESQL_URL --set secret.scraiberAPISecret=$FASTAPI_SECRET --set secret.sendinblueAPIKey=$SENDINBLUE_API_KEY --set secret.domainName=$DOMAIN_NAME
+helm install scraiber-api ./chart/scraiber-api --namespace backend \
+    --set secret.postgresqlURL=$POSTGRESQL_URL \
+    --set secret.sendinblueAPIKey=$SENDINBLUE_API_KEY \
+    --set secret.domainName=$DOMAIN_NAME \
+    --set secret.auth0_domain=$AUTH0_DOMAIN \
+    --set secret.auth0_clientid_frontend=$AUTH0_CLIENTID_FRONTEND \
+    --set secret.auth0_clientid_backend=$AUTH0_CLIENTID_BACKEND \
+    --set secret.auth0_client_secret_backend=$AUTH0_CLIENT_SECRET_BACKEND \
+    --set secret.auth0_audience=$AUTH0_AUDIENCE
 ```
 
 ## Accessing scraiber-api in the cluster

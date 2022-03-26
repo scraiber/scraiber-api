@@ -1,53 +1,30 @@
 import uuid
-from fastapi import HTTPException
 
-from app.api.models.projects import ProjectPrimaryKey, ProjectSchema, ProjectSchemaDB, PrimaryKeyWithUserID
+from app.api.models.projects import ProjectPrimaryKeyName
 from app.db import projects, database
 
 
-async def post(payload: ProjectSchemaDB):
-    query = projects.insert().values(payload)
+async def post(payload: ProjectPrimaryKeyName):
+    query = projects.insert().values(payload.dict()).returning(projects.c.project_id)
     return await database.execute(query=query)
 
 
-async def get(primary_key: ProjectPrimaryKey):
-    query = projects.select().where(primary_key.name == projects.c.name).where(primary_key.region == projects.c.region)
+async def get(project_id: uuid):
+    query = projects.select().where(project_id == projects.c.project_id)
     return await database.fetch_one(query=query)
 
 
-async def get_by_owner(owner_id: uuid):
-    query = projects.select().where(owner_id == projects.c.owner_id)
-    return await database.fetch_all(query=query)
-    
-
-async def owner_check(primary_key: PrimaryKeyWithUserID):
-    query = projects.select().where(primary_key.name == projects.c.name).where(primary_key.region == projects.c.region)
-    project = await database.fetch_one(query=query)
-    if not project or ProjectSchemaDB(**project).owner_id != primary_key.candidate_id:
-        raise HTTPException(status_code=404, detail="Project not found or user not owner")
-
-
-async def put_cpu_mem(payload: ProjectSchema):
+async def put_name(payload: ProjectPrimaryKeyName):
     query = (
         projects
         .update()
-        .where(payload.name == projects.c.name).where(payload.region == projects.c.region)
-        .values(max_project_cpu=payload.max_project_cpu, max_project_mem=payload.max_project_mem,
-            default_limit_pod_cpu=payload.default_limit_pod_cpu, default_limit_pod_mem=payload.default_limit_pod_mem)
-        .returning(projects.c.name, projects.c.region)
+        .where(payload.project_id == projects.c.project_id)
+        .values(name=payload.name)
+        .returning(projects.c.name)
     )
     return await database.execute(query=query)
 
-async def put_owner(payload: PrimaryKeyWithUserID):
-    query = (
-        projects
-        .update()
-        .where(payload.name == projects.c.name).where(payload.region == projects.c.region)
-        .values(owner_id=payload.candidate_id)
-        .returning(projects.c.name, projects.c.region)
-    )
-    return await database.execute(query=query)
 
-async def delete(payload: ProjectPrimaryKey):
-    query = projects.delete().where(payload.name == projects.c.name).where(payload.region == projects.c.region)
+async def delete(project_id: uuid):
+    query = projects.delete().where(project_id == projects.c.project_id).returning(projects.c.project_id)
     return await database.execute(query=query)

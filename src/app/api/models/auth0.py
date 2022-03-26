@@ -9,3 +9,7 @@ class Auth0User(Auth0Claims):
 
     class Config:
         allow_population_by_field_name = True
+
+
+class Auth0UserWithAdmin(Auth0User):
+    is_admin: bool = False

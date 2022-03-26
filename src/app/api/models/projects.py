@@ -1,18 +1,27 @@
-from pydantic import BaseModel, Field, validator, EmailStr, root_validator
-from typing import Dict, Any
-
+from pydantic import BaseModel, Field, validator, EmailStr, UUID4
+from typing import List, Optional
+import uuid
+from app.api.models.namespaces import NamespaceSchema, NamespacePrimaryKeyTransfer
+from app.api.models.auth0 import Auth0UserWithAdmin
 from app.kubernetes_setup import clusters
 
 
 class ProjectPrimaryKey(BaseModel):
+    project_id: UUID4 = Field(default_factory=uuid.uuid4)
+
+class ProjectName(BaseModel):
     name: str = Field(..., min_length=3, max_length=50)
-    region: str
-    
-    @validator('region')
-    def region_must_be_in_list(cls, field_value):
-        if field_value not in clusters.keys():
-            raise ValueError('must be in the regions offered')
-        return field_value
+
+class ProjectPrimaryKeyName(ProjectPrimaryKey):
+    name: str = Field(..., min_length=3, max_length=50)
+
+
+
+class ProjectPrimaryKeyUserID(ProjectPrimaryKey):
+    user_id: str
+
+class Project2UserDB(ProjectPrimaryKeyUserID):
+    is_admin: bool = False
 
 
 
@@ -23,53 +32,29 @@ class Project2ExternalDB(ProjectPrimaryKeyEmail):
     is_admin: bool = False
 
 
+class ProjectPrimaryKeyNameEmail(ProjectPrimaryKeyName):
+    e_mail: EmailStr
 
-class PrimaryKeyWithUserID(ProjectPrimaryKey):
-    candidate_id: str
+class ProjectPrimaryKeyNameEmailAdmin(ProjectPrimaryKeyNameEmail):
+    is_admin: bool
 
-class PrimaryKeyWithUserIDAndCertNo(PrimaryKeyWithUserID):
-    certificate_no: int = Field(..., ge=1)
-
-
-
-class Project2UserDB(ProjectPrimaryKey):
+class EmailWithUserID(BaseModel):
+    e_mail: EmailStr
     user_id: str
-    is_admin: bool = False
-
-    
-
-class ProjectSchema(ProjectPrimaryKey):
-    max_project_cpu: float = Field(..., ge=0)
-    max_project_mem: float = Field(..., ge=0)
-    default_limit_pod_cpu: float = Field(..., ge=0)
-    default_limit_pod_mem: float = Field(..., ge=0)
-
-    @root_validator()
-    def validate_cpu(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        if values.get('max_project_cpu')<values.get('default_limit_pod_cpu'):
-            raise ValueError('The CPU maximum for the project must not be smaller than the default CPU for a pod')
-        return values
-
-    @root_validator()
-    def validate_mem(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        if values.get('max_project_mem')<values.get('default_limit_pod_mem'):
-            raise ValueError('The memory maximum for the project must not be smaller than the default memory for a pod')
-        return values
-
-class ProjectSchemaDB(ProjectSchema):
-    owner_id: str
-
-class ProjectSchemaEmail(ProjectSchema):
-    e_mail: EmailStr
 
 
-class RegionEmail(BaseModel):
-    region: str
-    e_mail: EmailStr
-    
-    @validator('region')
-    def region_must_be_in_list(cls, field_value):
-        if field_value not in clusters.keys():
-            raise ValueError('must be in the regions offered')
-        return field_value
+
+class ProjectCompleteInfo(ProjectPrimaryKeyName):
+    namespaces: List[NamespaceSchema]
+    users: List[Auth0UserWithAdmin]
+    user_candidates: List[Auth0UserWithAdmin]
+    externals: List[EmailStr]
+    transfer_source_namespace: List[NamespacePrimaryKeyTransfer]
+    transfer_target_namespace: List[NamespacePrimaryKeyTransfer]
+
+
+
+
+
+
 

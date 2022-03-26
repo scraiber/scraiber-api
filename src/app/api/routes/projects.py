@@ -2,131 +2,158 @@ from typing import List
 from asyncpg.exceptions import UniqueViolationError
 from fastapi import APIRouter, HTTPException, Depends
 
-from app.api.crud import project2user, project2external, project2ownercandidate, projects
-from app.api.kubernetes import namespace, users
+from app.api.crud import project2user, project2external, projects, namespaces, namespace2projecttransfer
+from app.api.kubernetes import namespace
 from app.api.models.projects import (
-    ProjectPrimaryKey, 
-    ProjectSchema, 
-    ProjectSchemaDB, 
-    Project2UserDB, 
-    PrimaryKeyWithUserID, 
-    ProjectPrimaryKeyEmail, 
-    ProjectSchemaEmail)
+    Project2UserDB,
+    ProjectPrimaryKeyName,
+    ProjectPrimaryKeyUserID,
+    ProjectPrimaryKey,
+    ProjectName,
+    Project2ExternalDB,
+    ProjectCompleteInfo)
 from app.api.models.auth0 import Auth0User
-from app.api.routes.user_management import get_users_by_project
+from app.api.models.namespaces import NamespacePrimaryKey, NamespaceSchema, NamespacePrimaryKeyTransfer
+from app.api.routes import user_management
 from app.api.email.projects import *
 from app.auth0 import current_user, check_email_verified
-from app.kubernetes_setup import clusters
 
 router = APIRouter()
 
 
-@router.post("/", response_model=ProjectSchemaDB, status_code=201)
-async def create_project(payload: ProjectSchema, user: Auth0User = Depends(current_user)):
+@router.post("/", response_model=ProjectPrimaryKeyName, status_code=201)
+async def create_project(payload: ProjectName, user: Auth0User = Depends(current_user)):
     await check_email_verified(user)
-    if payload.name in clusters[payload.region]["blacklist"]:
-        raise HTTPException(status_code=403, detail="Project already exists")
 
-    post_project = {
-        "name": payload.name,
-        "region": payload.region,
-        "max_project_cpu": payload.max_project_cpu, 
-        "max_project_mem": payload.max_project_mem, 
-        "default_limit_pod_cpu": payload.default_limit_pod_cpu, 
-        "default_limit_pod_mem": payload.default_limit_pod_mem,
-        "owner_id": user.user_id
-    }
     try: 
-        await projects.post(post_project)
+        project_id = await projects.post(ProjectPrimaryKeyName(name=payload.name))
     except UniqueViolationError:
         raise HTTPException(status_code=403, detail="Project already exists")
 
-    await namespace.create_namespace(payload)
-
-    try: 
-        post_user = {
-            "name": payload.name,
-            "region": payload.region,
-            "user_id": user.user_id,
-            "is_admin": True    
-        }
-        await project2user.post(post_user)
+    try:
+        await project2user.post(Project2UserDB(project_id=project_id, user_id=user.user_id, is_admin=True))
     except UniqueViolationError:
         raise HTTPException(status_code=403, detail="User is already added to project")
 
-    await users.add_user_to_namespace(PrimaryKeyWithUserID(name=payload.name, region=payload.region, candidate_id=user.user_id))
-    await mail_project_post(ProjectPrimaryKeyEmail(name=payload.name, region=payload.region, e_mail=user.email))
+    await mail_project_post(ProjectPrimaryKeyNameEmail(project_id=project_id, name=payload.name, e_mail=user.email))
     
-    return post_project
+    return ProjectPrimaryKeyName(project_id=project_id, name=payload.name)
 
 
-@router.get("/", response_model=ProjectSchemaDB)
+@router.get("/", response_model=ProjectCompleteInfo)
 async def get_project(primary_key: ProjectPrimaryKey, user: Auth0User = Depends(current_user)):
-    project2user_res = await project2user.get(Project2UserDB(name=primary_key.name, region=primary_key.region, user_id=user.user_id))
-    if not project2user_res:
-        raise HTTPException(status_code=404, detail="Project for user not found")
+    await check_email_verified(user)
+    await project2user.user_check(ProjectPrimaryKeyUserID(project_id=primary_key.project_id, user_id=user.user_id))
 
-    project = await projects.get(primary_key)
+    project = await projects.get(primary_key.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return project
+    project_item = ProjectPrimaryKeyName(**project)
+
+    namespaces_res = await namespaces.get_by_project(primary_key.project_id)
+    if not namespaces_res:
+        namespaces_list = []
+    else:
+        namespaces_list = [NamespaceSchema(**item) for item in namespaces_res]
+    
+    user_list = await user_management.get_users_by_project(primary_key, user)
+
+    user_candidates_list = await user_management.get_invited_users_by_project(primary_key, user)
+
+    external_list_res = await user_management.get_externals_by_project(primary_key, user)
+    if not external_list_res:
+        external_list = []
+    else:
+        external_list = [Project2ExternalDB(**item).e_mail for item in external_list_res]
+
+    namespaces_transfer_source_res = await namespace2projecttransfer.get_by_old_project(primary_key.project_id)
+    if not namespaces_transfer_source_res:
+        namespaces_transfer_source_list = []
+    else:
+        namespaces_transfer_source_list = [NamespacePrimaryKeyTransfer(**item) for item in namespaces_transfer_source_res]
+
+    namespaces_transfer_target_res = await namespace2projecttransfer.get_by_new_project(primary_key.project_id)
+    if not namespaces_transfer_target_res:
+        namespaces_transfer_target_list = []
+    else:
+        namespaces_transfer_target_list = [NamespacePrimaryKeyTransfer(**item) for item in namespaces_transfer_target_res]
+
+    return ProjectCompleteInfo(project_id=primary_key.project_id, name=project_item.name,
+                               namespaces=namespaces_list, users=user_list,
+                               user_candidates=user_candidates_list, externals=external_list,
+                               transfer_source_namespace=namespaces_transfer_source_list,
+                               transfer_target_namespace=namespaces_transfer_target_list)
 
 
-@router.get("/by_user", response_model=List[Project2UserDB])
-async def get_project_by_owner(user: Auth0User = Depends(current_user)):
+@router.get("/by_user", response_model=List[ProjectCompleteInfo])
+async def get_project_by_user(admin_state: bool = False, user: Auth0User = Depends(current_user)) -> List[ProjectCompleteInfo]:
+    await check_email_verified(user)
     associated_projects = await project2user.get_by_user(user.user_id)
     if not associated_projects:
         raise HTTPException(status_code=404, detail="User not associated to any project")
+    output_list = []
+    for item in associated_projects:
+        project_item = Project2UserDB(**item)
+        if admin_state and not project_item.is_admin:
+            continue
+        project_id_item = project_item.project_id
+        complete_info_item_res = await get_project(ProjectPrimaryKey(project_id=project_id_item), user)
+        if complete_info_item_res:
+            output_list.append(complete_info_item_res)
 
-    return associated_projects
+    return output_list
 
 
-@router.get("/by_owner", response_model=List[ProjectSchemaDB])
-async def get_project_by_owner(user: Auth0User = Depends(current_user)):
-    project2owner = await projects.get_by_owner(user.user_id)
-    if not project2owner:
-        raise HTTPException(status_code=404, detail="No project owned by user")
+@router.put("/name", response_model=ProjectPrimaryKeyName)
+async def change_project_name(payload: ProjectPrimaryKeyName, user: Auth0User = Depends(current_user)):
+    await check_email_verified(user)
+    await project2user.admin_check(ProjectPrimaryKeyUserID(project_id=payload.project_id, user_id=user.user_id))
 
-    return project2owner
+    project = await projects.get(payload.project_id)
+    project_old_name = ""
+    if project:
+        project_old_name = ProjectPrimaryKeyName(**project).name
 
-'''
-@router.get("/all", response_model=List[ProjectSchemaDB])
-async def read_all_projects(user: Auth0User = Depends(current_user)):
-    project2user_res = await project2user.get_by_user(user.user_id)
-    if not project2user_res:
-        raise HTTPException(status_code=404, detail="No projects for user found")
-    project2user_res_deserialized = [Project2UserDB(**item).dict() for item in project2user_res]
-    payload_list = [{"name": item["name"], "region": item["region"]} for item in project2user_res_deserialized]
-    return await projects.get_many(payload_list)
-'''
+    update_res = await projects.put_name(payload)
+    if not update_res:
+        raise HTTPException(status_code=404, detail="The name could not be changed")
 
-@router.put("/update_cpu_memory", response_model=ProjectSchema, status_code=200)
-async def update_cpu_memory(update: ProjectSchema, user: Auth0User = Depends(current_user)):
-    await project2user.admin_check(Project2UserDB(name=update.name, region=update.region, user_id=user.user_id))
-    await projects.put_cpu_mem(update)
-    await namespace.update_namespace(update)
-
-    users_to_inform = await get_users_by_project(ProjectPrimaryKey(name=update.name, region=update.region), user)
+    users_to_inform = await user_management.get_users_by_project(ProjectPrimaryKey(project_id=payload.project_id), user)
     for user_item in users_to_inform:
-        await mail_project_put(ProjectSchemaEmail(name=update.name, region=update.region,
-            max_project_cpu=update.max_project_cpu, max_project_mem=update.max_project_mem,
-            default_limit_pod_cpu=update.default_limit_pod_cpu, default_limit_pod_mem=update.default_limit_pod_mem,
-            e_mail=user_item.email))
-    return update
+        await mail_project_name_put(ProjectPrimaryKeyNameEmail(project_id=payload.project_id, name=project_old_name, e_mail=user_item.email),
+                                    new_name=payload.name)
+    
+    return payload
 
 
-@router.delete("/", status_code=200)
-async def delete_by_project(primary_key: ProjectPrimaryKey, user: Auth0User = Depends(current_user)):
-    await projects.owner_check(PrimaryKeyWithUserID(name=primary_key.name, region=primary_key.region, candidate_id=user.user_id))
+@router.delete("/", response_model=ProjectPrimaryKey, status_code=200)
+async def delete_project(primary_key: ProjectPrimaryKey, user: Auth0User = Depends(current_user)):
+    await check_email_verified(user)
+    await project2user.admin_check(ProjectPrimaryKeyUserID(project_id=primary_key.project_id, user_id=user.user_id))
 
-    users_to_inform = await get_users_by_project(primary_key, user)
+    project = await projects.get(primary_key.project_id)
+    project_name = ""
+    if project:
+        project_name = ProjectPrimaryKeyName(**project).name
+
+    deletion_res = await projects.delete(primary_key.project_id)
+    if not deletion_res:
+        raise HTTPException(status_code=404, detail="Project could not be deleted")
+
+    users_to_inform = await user_management.get_users_by_project(primary_key, user)
     for user_item in users_to_inform:
-        await mail_project_delete(ProjectPrimaryKeyEmail(name=primary_key.name, region=primary_key.region, e_mail=user_item.email))
-        
-    await projects.delete(primary_key)
-    await namespace.delete_namespace(primary_key)
-    await project2external.delete_by_project(primary_key)
-    await project2ownercandidate.delete(primary_key)
-    await project2user.delete_by_project(primary_key)
+        await mail_project_delete(ProjectPrimaryKeyNameEmail(project_id=primary_key.project_id, name=project_name, e_mail=user_item.email))
+
+    await project2external.delete_by_project(primary_key.project_id)
+    await project2user.delete_by_project(primary_key.project_id)
+    await namespace2projecttransfer.delete_by_old_project(primary_key.project_id)
+    await namespace2projecttransfer.delete_by_new_project(primary_key.project_id)
+
+    namespaces_res = await namespaces.get_by_project(primary_key.project_id)
+    if namespaces_res:
+        for item in namespaces_res:
+            namespace_item = NamespaceSchema(**item)
+            await namespace.delete_namespace(NamespacePrimaryKey(name=namespace_item.name, region=namespace_item.region))
+    await namespaces.delete_by_project(primary_key.project_id)
     return primary_key
